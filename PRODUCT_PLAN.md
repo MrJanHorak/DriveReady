@@ -1,6 +1,6 @@
 # DriveReady product plan
 
-Working plan, November 1, 2026. This captures the product vision and a proposed sequence; it is not a fixed specification.
+Working plan, November 1, 2026. This captures the product vision and a proposed sequence; it is not a fixed specification. The selected first pilot is the Augusta, Georgia area.
 
 ## Vision
 

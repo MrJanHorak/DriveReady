@@ -12,13 +12,13 @@ npm ci
 npm run dev
 ```
 
-Open the local address printed by Vite. To check the production build, run `npm run build`. There are currently no test, lint, or type-check scripts configured.
+Open the local address printed by Vite. Run `npm run build` to check the production build and `npm test` for the family-data checks. Lint and type-check scripts are not yet configured.
 
 ## Current state
 
-The dashboard, route explorer, and route publishing wizard are interactive prototypes. Route search, filters, selection, map zoom, favorites, driver selection, and the wizard use temporary component state. The map and all people, routes, ratings, logs, progress, and requirements are sample content. A route submitted through the wizard is not saved or published. Refreshing or leaving parts of the interface can reset state.
+Learners and manually entered driving logs are saved in the current browser's local storage. Progress is calculated from those logs and can be edited. This is an early local-only implementation: data is not synced or backed up and may be lost if browser data is cleared. Do not enter sensitive personal details.
 
-Driving Logs and State Requirements currently show the dashboard content. The app has no backend, account system, real mapping integration, or persistent storage. Treat the on-screen compliance claims and route safety information as placeholders until the product's requirements and authoritative sources are established.
+The route explorer and route creation wizard remain design previews with sample content and temporary state; routes are not published, location-aware, or suitable for navigation. State requirements are not yet provided. The app has no backend, account system, or real mapping integration.
 
 See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the assessment and known gaps, and [PRODUCT_PLAN.md](PRODUCT_PLAN.md) for the product vision and proposed phases.
 

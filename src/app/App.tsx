@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from "react";
+import FamilyWorkspace from "./FamilyWorkspace";
 import {
   LayoutDashboard,
   Map,
@@ -658,7 +659,7 @@ function RouteWizard({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">{wizardSteps.map((s) => (<div key={s.id} className={`rounded-full transition-all duration-300 ${step === s.id ? "w-5 h-1.5 bg-[#0C7A8D]" : step > s.id ? "w-1.5 h-1.5 bg-[#12B5C9]" : "w-1.5 h-1.5 bg-muted-foreground/30"}`} />))}</div>
-            {step < 3 ? (<button onClick={() => setStep((s) => s + 1)} disabled={!canAdvance} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${canAdvance ? "bg-[#0C7A8D] hover:bg-[#0A6A7B] text-white shadow-sm hover:shadow-md" : "bg-muted text-muted-foreground cursor-not-allowed"}`}>Continue <ChevronRight size={15} /></button>) : (<button disabled={!canAdvance} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${canAdvance ? "bg-[#0C7A8D] hover:bg-[#0A6A7B] text-white shadow-sm hover:shadow-md" : "bg-muted text-muted-foreground cursor-not-allowed"}`} onClick={onClose}><Upload size={14} /> Publish Route</button>)}
+            {step < 3 ? (<button onClick={() => setStep((s) => s + 1)} disabled={!canAdvance} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${canAdvance ? "bg-[#0C7A8D] hover:bg-[#0A6A7B] text-white shadow-sm hover:shadow-md" : "bg-muted text-muted-foreground cursor-not-allowed"}`}>Continue <ChevronRight size={15} /></button>) : (<button className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold bg-[#0C7A8D] text-white" onClick={onClose}>Close preview</button>)}
           </div>
         </div>
       </div>
@@ -1209,7 +1210,7 @@ function RouteExplorer({ onPublish }: { onPublish: () => void }) {
 }
 
 // ── Main App ────────────────────────────────────────────────────────────────
-export default function App() {
+function LegacyApp() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [selectedDriver, setSelectedDriver] = useState<Driver>(drivers[0]);
   const [driverDropdownOpen, setDriverDropdownOpen] = useState(false);
@@ -1399,4 +1400,29 @@ export default function App() {
       {wizardOpen && <RouteWizard onClose={() => setWizardOpen(false)} />}
     </div>
   );
+}
+
+export default function App() {
+  const [activeNav, setActiveNav] = useState("dashboard");
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const title = navItems.find((item) => item.id === activeNav)?.label ?? "Dashboard";
+
+  return <div className="flex h-screen w-screen overflow-hidden bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <aside className="flex w-16 flex-shrink-0 flex-col border-r border-border bg-card sm:w-52">
+      <div className="flex h-16 items-center gap-2 border-b border-border px-4 font-bold text-[#0C7A8D]"><Navigation size={20} /><span className="hidden sm:inline">DriveReady</span></div>
+      <nav aria-label="Main navigation" className="space-y-1 p-2 sm:p-3">
+        {navItems.map((item) => <button key={item.id} title={item.label} aria-label={item.label} aria-current={activeNav === item.id ? "page" : undefined} onClick={() => setActiveNav(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium ${activeNav === item.id ? "bg-[#E4EFF2] text-[#0C7A8D]" : "text-muted-foreground hover:bg-muted"}`}>
+          {item.icon}<span className="hidden sm:inline">{item.label}</span>
+        </button>)}
+      </nav>
+    </aside>
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <header className="flex h-16 flex-shrink-0 items-center border-b border-border bg-card px-5"><h1 className="text-lg font-bold">{title}</h1></header>
+      {activeNav === "routes" ? <>
+        <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900"><strong>Design preview:</strong> These Augusta-area routes, maps, ratings, and safety notes are fictional examples. They are not location-aware or suitable for navigation. Route creation is a preview and does not save or publish.</div>
+        <RouteExplorer onPublish={() => setWizardOpen(true)} />
+      </> : activeNav === "requirements" ? <main className="flex-1 overflow-auto p-8"><div className="mx-auto max-w-3xl rounded-2xl border border-border bg-card p-6"><h2 className="text-xl font-bold">State requirements</h2><p className="mt-3 text-sm text-muted-foreground">We plan to start with Georgia. Requirements are not available here yet; we will add them after they have been sourced and reviewed. Check official state guidance for current rules.</p></div></main> : <FamilyWorkspace showAll={activeNav === "logs"} />}
+    </div>
+    {wizardOpen && <RouteWizard onClose={() => setWizardOpen(false)} />}
+  </div>;
 }

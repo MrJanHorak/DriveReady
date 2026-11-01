@@ -1,6 +1,6 @@
 # DriveReady project status
 
-Assessment of the supplied workspace, November 1, 2026. This is a starting point for discussion, not an agreed product specification.
+Assessment of the workspace, November 1, 2026. Augusta, Georgia has been selected as the first pilot area. This is a working assessment, not an agreed product specification.
 
 ## Product hypothesis
 
@@ -9,19 +9,19 @@ DriveReady appears intended to help families or other supervisors guide learner 
 ## What exists
 
 - A React, Vite, and Tailwind desktop-oriented interface, based on a Figma export.
-- A sample dashboard with a learner selector, hours progress, recent sessions, and suggested routes.
+- Learner creation and manual drive logs, including edits and per-learner day/night totals, stored locally in the current browser.
 - A route explorer with sample routes, search and filters, a diagrammatic map, selection, zoom, and temporary favorites.
 - A three-step route creation interface with waypoint drawing, skills, difficulty, and safety fields. Its publish action only closes the wizard.
 - A successful local `npm run build` on November 1, 2026. This verifies compilation, not complete functionality or correctness.
 
 ## Gaps and risks to resolve
 
-- **Real workflows and data:** There is no persistence or backend. Sample profiles, progress, sessions, routes, community metrics, and notifications are hardcoded. Switching drivers changes the displayed name but does not change progress or logs. No actual log entry workflow is implemented.
-- **Navigation and controls:** Driving Logs and State Requirements show the dashboard, and some visible actions have no behavior, including Use Route and View all. Search matches route title, neighborhood, or skill rather than the advertised ZIP code or school search.
+- **Real workflows and data:** Learner profiles and drive logs persist only in this browser; there is no backend, sync, or backup. Route and community data remain examples.
+- **Navigation and controls:** The route explorer remains a design preview, and some visible actions have no behavior, including Use Route. Search matches route title, neighborhood, or skill rather than the advertised ZIP code or school search. State requirements are not yet available.
 - **Maps and sharing:** Maps and waypoints are SVG illustrations, not geographic routes or navigation. Publishing does not save or share data, and favorites are temporary.
-- **Trust and safety:** Licensing progress and compliance claims are static and unverified; sample route and safety descriptions should not be treated as real-world guidance. Requirements need authoritative, dated sources and an agreed update process before use for eligibility decisions. Community publishing would also need a safety and moderation approach.
+- **Trust and safety:** Sample route and safety descriptions should not be treated as real-world guidance. Requirements need authoritative, dated sources and an agreed update process before use for eligibility decisions. Community publishing would also need a safety and moderation approach.
 - **Product fit:** The mock references both Atlanta and the Augusta area and uses a fixed date. Responsive/mobile behavior and accessibility need assessment; the current interface uses fixed desktop-oriented dimensions.
-- **Engineering foundation:** Most app logic and sample content are in `src/app/App.tsx`. The package has no configured automated tests, lint, or TypeScript checking. The workspace has no Git repository initialized, so there is no local version history in this folder.
+- **Engineering foundation:** Much of the original route prototype remains in `src/app/App.tsx`. Basic family-data tests are available, but lint and TypeScript checking are not yet configured. The workspace is a Git repository.
 
 ## Decisions to make together
 

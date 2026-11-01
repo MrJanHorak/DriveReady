@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "test": "node --test src/app/familyData.test.js",
     "dev": "vite"
   },
   "dependencies": {
