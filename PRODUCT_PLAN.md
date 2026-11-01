@@ -38,6 +38,7 @@ Proposed capabilities:
 - Manual drive logs containing date, duration, day/night, skills and conditions practiced, optional route, and notes. Support editing and correcting entries.
 - A progress view calculated from logs, showing total and night hours as well as skills and conditions practiced. It should distinguish exposure from proficiency and make repetition possible.
 - Location-aware route discovery: use a location the family provides, or their device location with permission, to show nearby routes first. Let them adjust the area or search elsewhere and clearly show the route's location and approximate distance. When nearby results are scarce, explain that and offer a wider search rather than silently presenting distant routes as local. Combine proximity with skill, difficulty, and other filters. Supervisors can create and share routes; decide how routes are reviewed before enabling public contributions.
+- The current drive-log route description and external map preview are an interim solution. Revisit route creation with an interactive map and a way to choose and save actual locations and paths; the current experience has not yet met the desired vision.
 - An initial learning-tip collection, with a clear distinction between product-provided and community-contributed advice. Start with a manageable contribution and review process.
 - State information only where sourced and reviewed, with source links and review dates. Show clearly when a state or requirement is not yet covered; do not infer compliance from incomplete information.
 - Responsive, accessible web experience and clear privacy and data controls appropriate to the chosen account model.
@@ -74,7 +75,7 @@ Community routes and tips need reporting, moderation, and a way to flag outdated
 
 ## Decisions to make next
 
-1. **Pilot:** Which state and local area should we use to validate the first experience?
+1. **Pilot:** Augusta, Georgia is the selected initial area; define the scope and participants for validation.
 2. **Audience:** Are parents and guardians the only initial supervisors, or should other trusted adults and instructors be supported from the start?
 3. **Accounts and privacy:** What family access, invitation, data deletion, and sharing controls are needed for the first release?
 4. **Routes:** How should supervisors create routes initially, and should a new route be private by default, shared with a family, or eligible for public review?

@@ -24,3 +24,23 @@ export function summarizeDrives(drives, learnerId) {
 export function formatMinutes(minutes) {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
+
+export function validRouteUrl(value) {
+  if (!value.trim()) return true;
+  try { return new URL(value.trim()).protocol === "https:"; }
+  catch { return false; }
+}
+
+export function locationMapUrl(location) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${location.latitude},${location.longitude}`)}`;
+}
+
+export function placeMapUrl(place) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.trim())}`;
+}
+
+export function routeMapUrl(route) {
+  const params = new URLSearchParams({ api: "1", origin: route.start, destination: route.end, travelmode: "driving" });
+  if (route.stops.length) params.set("waypoints", route.stops.join("|"));
+  return `https://www.google.com/maps/dir/?${params}`;
+}

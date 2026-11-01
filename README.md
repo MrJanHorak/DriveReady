@@ -16,7 +16,7 @@ Open the local address printed by Vite. Run `npm run build` to check the product
 
 ## Current state
 
-Learners and manually entered driving logs are saved in the current browser's local storage. Progress is calculated from those logs and can be edited. This is an early local-only implementation: data is not synced or backed up and may be lost if browser data is cleared. Do not enter sensitive personal details.
+Learners and manually entered driving logs are saved in the current browser's local storage. Progress is calculated from those logs and can be edited. Select skills, roads, and conditions on a drive to see per-learner practice coverage; older free-text entries remain intact but must be tagged to appear in those counts. A log can include a place, an HTTPS map link, a route described by a start, destination and up to three stops, and an optional current-location pin captured with browser permission. Place and route descriptions can be opened in Google Maps for review; Google Maps calculates the suggested path, which might differ from the actual drive. A pin is a single approximate point, not a recorded or verified route. Opening a location or route in Google Maps, or opening a saved link, sends that information to the external service. This is an early local-only implementation: data is not synced or backed up and may be lost if browser data is cleared. Do not enter sensitive personal details.
 
 The route explorer and route creation wizard remain design previews with sample content and temporary state; routes are not published, location-aware, or suitable for navigation. State requirements are not yet provided. The app has no backend, account system, or real mapping integration.
 
