@@ -16,3 +16,9 @@ export function practiceCoverage(drives, learnerId, field, choices) {
     return { label, count: matches.length, lastDate };
   });
 }
+
+export function unrecordedSkills(drives, learnerId) {
+  return practiceCoverage(drives, learnerId, "practicedSkills", PRACTICE_SKILLS)
+    .filter((item) => item.count === 0)
+    .map((item) => item.label);
+}

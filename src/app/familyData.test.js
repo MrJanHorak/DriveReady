@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { emptyFamily, formatMinutes, locationMapUrl, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validRouteUrl } from "./familyData.js";
-import { practiceCoverage } from "./practiceData.js";
+import { practiceCoverage, PRACTICE_SKILLS, unrecordedSkills } from "./practiceData.js";
 
 test("new browser starts with an empty family and saved data can be read back", () => {
   const values = new Map();
@@ -67,4 +67,15 @@ test("coverage counts each learner's tagged drives, using the latest date and ig
   ]);
   drives[1].practicedSkills = [];
   assert.deepEqual(practiceCoverage(drives, "a", "practicedSkills", ["Parking"])[0], { label: "Parking", count: 1, lastDate: "2026-01-01" });
+});
+
+test("unrecorded practice ideas reflect only the selected learner's tags", () => {
+  const drives = [
+    { learnerId: "a", date: "2026-01-01", practicedSkills: ["Turns"] },
+    { learnerId: "b", date: "2026-01-01", practicedSkills: ["Parking"] },
+  ];
+  assert.equal(unrecordedSkills(drives, "a").includes("Turns"), false);
+  assert.equal(unrecordedSkills(drives, "a").includes("Parking"), true);
+  assert.deepEqual(unrecordedSkills([], "a"), PRACTICE_SKILLS);
+  assert.deepEqual(unrecordedSkills([{ learnerId: "a", date: "2026-01-01", practicedSkills: PRACTICE_SKILLS }], "a"), []);
 });

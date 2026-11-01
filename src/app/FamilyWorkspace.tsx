@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { emptyFamily, formatMinutes, locationMapUrl, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validRouteUrl } from "./familyData";
 import PracticeCoverage, { PracticeChoices } from "./PracticeCoverage";
+import GettingStarted from "./GettingStarted";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
 
 type Learner = { id: string; name: string };
@@ -126,6 +127,7 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
         <p className="mt-1 text-sm text-muted-foreground">{family.learners.length ? "Keep each learner’s practice separate." : "Add a learner, then record a practice drive. A first name or nickname is enough."}</p>
         <form onSubmit={addLearner} className="mt-3 flex flex-wrap gap-2"><label className="sr-only" htmlFor="learner-name">Learner name or nickname</label><input id="learner-name" className={`${field} max-w-xs`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Learner name or nickname" maxLength={60} required /><button className={secondary} disabled={!!initial.error}>Add learner</button></form>
       </section>
+      {!showAll && <GettingStarted drives={family.drives} learnerId={selectedId || undefined} />}
       {learner && <>
         <section className="grid gap-3 sm:grid-cols-3" aria-label="Practice summary">
           {[ ["Total driving", summary.totalMinutes], ["Day driving", summary.dayMinutes], ["Night driving", summary.nightMinutes] ].map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-card p-4"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold text-[#0C7A8D]">{formatMinutes(value as number)}</p></div>)}
