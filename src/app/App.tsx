@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import FamilyWorkspace from "./FamilyWorkspace";
+import StateRequirements from "./StateRequirements";
 import {
   LayoutDashboard,
   Map,
@@ -1421,7 +1422,7 @@ export default function App() {
       {activeNav === "routes" ? <>
         <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900"><strong>Design preview:</strong> These Augusta-area routes, maps, ratings, and safety notes are fictional examples. They are not location-aware or suitable for navigation. Route creation is a preview and does not save or publish.</div>
         <RouteExplorer onPublish={() => setWizardOpen(true)} />
-      </> : activeNav === "requirements" ? <main className="flex-1 overflow-auto p-8"><div className="mx-auto max-w-3xl rounded-2xl border border-border bg-card p-6"><h2 className="text-xl font-bold">State requirements</h2><p className="mt-3 text-sm text-muted-foreground">We plan to start with Georgia. Requirements are not available here yet; we will add them after they have been sourced and reviewed. Check official state guidance for current rules.</p></div></main> : <FamilyWorkspace showAll={activeNav === "logs"} />}
+      </> : activeNav === "requirements" ? <StateRequirements /> : <FamilyWorkspace showAll={activeNav === "logs"} />}
     </div>
     {wizardOpen && <RouteWizard onClose={() => setWizardOpen(false)} />}
   </div>;
