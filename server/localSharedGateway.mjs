@@ -9,6 +9,8 @@ const routes = Object.freeze({
   "/v1/invitations/preview": { action: "previewInvitation", fields: ["spaceId", "token"] },
   "/v1/invitations/accept": { action: "acceptInvitation", fields: ["spaceId", "token"] },
   "/v1/invitations/cancel": { action: "cancelInvitation", fields: ["spaceId", "token"] },
+  "/v1/invitations/list": { action: "listInvitations", fields: ["spaceId", "cursor"] },
+  "/v1/invitations/cancel-by-id": { action: "cancelInvitationById", fields: ["spaceId", "invitationId"] },
   "/v1/members/remove": { action: "removeMember", fields: ["spaceId", "memberUid"] },
 });
 

@@ -100,12 +100,20 @@ test("expiry, cancellation, manager revocation, and member removal take effect",
   const manager = await account("manager-lifecycle"), adult = await account("adult-lifecycle"), other = await account("other-lifecycle"), later = await account("later-lifecycle");
   const { spaceId } = await service.createSpace({ idToken: manager.token, learnerName: "Learner" });
   const cancelled = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: adult.email, role: "supervisor" });
+  const listing = await service.listInvitations({ idToken: manager.token, spaceId });
+  assert.equal(listing.invitations.length, 1);
+  assert.equal(listing.invitations[0].recipientEmail, adult.email);
+  assert.equal(JSON.stringify(listing).includes(cancelled.token), false);
+  await assert.rejects(service.listInvitations({ idToken: other.token, spaceId }), /Not authorized/);
+  await assert.rejects(service.cancelInvitationById({ idToken: other.token, spaceId, invitationId: listing.invitations[0].id }), /Not authorized/);
   await assert.rejects(service.cancelInvitation({ idToken: other.token, spaceId, token: cancelled.token }), /Not authorized/);
-  await service.cancelInvitation({ idToken: manager.token, spaceId, token: cancelled.token });
+  await service.cancelInvitationById({ idToken: manager.token, spaceId, invitationId: listing.invitations[0].id });
+  assert.equal((await service.listInvitations({ idToken: manager.token, spaceId })).invitations.length, 0);
   await assert.rejects(service.previewInvitation({ idToken: adult.token, spaceId, token: cancelled.token }), /cannot be accepted/);
   await assert.rejects(service.acceptInvitation({ idToken: adult.token, spaceId, token: cancelled.token }), /cannot be accepted/);
   const expired = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: adult.email, role: "supervisor" });
   currentTime = expired.expiresAt;
+  assert.equal((await service.listInvitations({ idToken: manager.token, spaceId })).invitations.length, 0);
   await assert.rejects(service.previewInvitation({ idToken: adult.token, spaceId, token: expired.token }), /cannot be accepted/);
   await assert.rejects(service.acceptInvitation({ idToken: adult.token, spaceId, token: expired.token }), /cannot be accepted/);
   const stale = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: adult.email, role: "supervisor" });
@@ -119,6 +127,7 @@ test("expiry, cancellation, manager revocation, and member removal take effect",
   const changedAddressInvite = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: changedEmail, role: "supervisor" });
   await assert.rejects(service.removeMember({ idToken: adult.token, spaceId, memberUid: manager.uid }), /Not authorized/);
   await service.removeMember({ idToken: manager.token, spaceId, memberUid: adult.uid });
+  assert.equal((await service.listInvitations({ idToken: manager.token, spaceId })).invitations.length, 0);
   assert.equal((await db.doc(`users/${adult.uid}/spaceLinks/${spaceId}`).get()).exists, false);
   await assert.rejects(getDocFromServer(doc(adult.db, `spaces/${spaceId}`)), /permission/i);
   await assert.rejects(service.acceptInvitation({ idToken: adult.token, spaceId, token: stale.token }), /cannot be accepted/);
@@ -133,4 +142,40 @@ test("expiry, cancellation, manager revocation, and member removal take effect",
   const pending = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: later.email, role: "supervisor" });
   await db.doc(`spaces/${spaceId}/members/${manager.uid}`).update({ active: false });
   await assert.rejects(service.acceptInvitation({ idToken: later.token, spaceId, token: pending.token }), /cannot be accepted/);
+});
+
+test("acceptance and manager cancellation cannot both succeed", async () => {
+  const manager = await account("manager-cancel-race"), adult = await account("adult-cancel-race");
+  const { spaceId } = await service.createSpace({ idToken: manager.token, learnerName: "Race learner" });
+  const invite = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: adult.email, role: "supervisor" });
+  const id = (await service.listInvitations({ idToken: manager.token, spaceId })).invitations[0].id;
+  const results = await Promise.allSettled([
+    service.acceptInvitation({ idToken: adult.token, spaceId, token: invite.token }),
+    service.cancelInvitationById({ idToken: manager.token, spaceId, invitationId: id }),
+  ]);
+  assert.equal(results.filter((item) => item.status === "fulfilled").length, 1);
+  assert.equal(results.filter((item) => item.status === "rejected").length, 1);
+});
+
+test("invitation pages scan past expired records and remain manager-only", async () => {
+  const manager = await account("manager-pages"), outsider = await account("outsider-pages");
+  const { spaceId } = await service.createSpace({ idToken: manager.token, learnerName: "Paged learner" });
+  const batch = db.batch();
+  for (let index = 0; index < 53; index++) {
+    const id = index.toString(16).padStart(64, "0");
+    batch.set(db.doc(`spaces/${spaceId}/invitations/${id}`), { status: "pending", recipientEmail: `page-${index}@example.test`, role: "supervisor", invitationVersion: 0, managerUid: manager.uid, expiresAt: currentTime + (index < 26 ? -1 : 60_000) });
+  }
+  await batch.commit();
+  const first = await service.listInvitations({ idToken: manager.token, spaceId });
+  assert.equal(first.invitations.length, 0);
+  assert.ok(first.nextCursor);
+  await assert.rejects(service.listInvitations({ idToken: outsider.token, spaceId, cursor: first.nextCursor }), /Not authorized/);
+  await assert.rejects(service.listInvitations({ idToken: manager.token, spaceId, cursor: "bad/cursor" }), /Not authorized/);
+  const second = await service.listInvitations({ idToken: manager.token, spaceId, cursor: first.nextCursor });
+  assert.equal(second.invitations.length, 24);
+  assert.ok(second.nextCursor);
+  const third = await service.listInvitations({ idToken: manager.token, spaceId, cursor: second.nextCursor });
+  assert.equal(third.invitations.length, 3);
+  assert.equal(third.nextCursor, null);
+  assert.equal(new Set([...second.invitations, ...third.invitations].map((item) => item.id)).size, 27);
 });

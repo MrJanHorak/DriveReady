@@ -1,11 +1,12 @@
 // Trusted server-side prototype. Do not import into the browser or deploy as-is.
 // Callers must never supply the Admin SDK instances or clock over a network API.
 import { createHash, randomBytes } from "node:crypto";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldPath, FieldValue } from "firebase-admin/firestore";
 
 const INVITATION_LIFETIME_MS = 48 * 60 * 60 * 1000;
 const idPattern = /^[A-Za-z0-9_-]{1,128}$/;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
+const invitationIdPattern = /^[a-f0-9]{64}$/;
 const unavailable = () => new Error("Invitation cannot be accepted.");
 const unauthorized = () => new Error("Not authorized.");
 
@@ -54,7 +55,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     const link = db.collection("users").doc(caller.uid).collection("spaceLinks").doc(space.id);
     await db.runTransaction(async (tx) => {
       tx.create(space, { learnerName: learnerName.trim(), status: "active", managerUid: caller.uid, learnerUid: null, invitationVersion: 0, createdAt: FieldValue.serverTimestamp() });
-      tx.create(member, { role: "manager", active: true, joinedAt: FieldValue.serverTimestamp() });
+      tx.create(member, { role: "manager", active: true, emailAtJoining: caller.email, joinedAt: FieldValue.serverTimestamp() });
       tx.create(link, { spaceId: space.id });
     });
     return { spaceId: space.id };
@@ -107,7 +108,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     const invite = space.collection("invitations").doc(invitationId(token));
     await db.runTransaction(async (tx) => {
       const { item } = await validInvitation(tx, space, member, invite, caller);
-      tx.set(member, { role: item.role, active: true, joinedAt: FieldValue.serverTimestamp() });
+      tx.set(member, { role: item.role, active: true, emailAtJoining: caller.email, joinedAt: FieldValue.serverTimestamp() });
       tx.set(db.collection("users").doc(caller.uid).collection("spaceLinks").doc(space.id), { spaceId: space.id });
       if (item.role === "learner") tx.update(space, { learnerUid: caller.uid });
       tx.update(invite, { status: "accepted", acceptedByUid: caller.uid, acceptedAt: FieldValue.serverTimestamp() });
@@ -123,6 +124,40 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       const [spaceSnap, managerSnap, inviteSnap] = await tx.getAll(space, member, invite);
       if (!isManager(spaceSnap, managerSnap) || spaceSnap.data().managerUid !== caller.uid) throw unauthorized();
       if (!inviteSnap.exists || inviteSnap.data().status !== "pending") throw unavailable();
+      tx.update(invite, { status: "cancelled", cancelledAt: FieldValue.serverTimestamp() });
+    });
+  }
+
+  async function listInvitations({ idToken, spaceId, cursor = "" }) {
+    const caller = await identity(idToken);
+    if (typeof cursor !== "string" || (cursor !== "" && !invitationIdPattern.test(cursor))) throw unauthorized();
+    const { space, member } = refs(spaceId, caller.uid);
+    return db.runTransaction(async (tx) => {
+      const [spaceSnap, managerSnap] = await tx.getAll(space, member);
+      if (!isManager(spaceSnap, managerSnap) || spaceSnap.data().managerUid !== caller.uid) throw unauthorized();
+      const version = invitationVersion(spaceSnap.data());
+      // Scan bounded pages, including expired or invalidated pending records.
+      let query = space.collection("invitations").where("status", "==", "pending").orderBy(FieldPath.documentId()).limit(26);
+      if (cursor) query = query.startAfter(cursor);
+      const snapshot = await tx.get(query);
+      const page = snapshot.docs.slice(0, 25);
+      const invitations = page.filter((doc) => {
+        const item = doc.data();
+        return item.invitationVersion === version && Number.isSafeInteger(item.expiresAt) && item.expiresAt > now() && item.managerUid === caller.uid && ["supervisor", "learner"].includes(item.role);
+      }).map((doc) => ({ id: doc.id, recipientEmail: doc.data().recipientEmail, role: doc.data().role, expiresAt: doc.data().expiresAt }));
+      return { invitations, nextCursor: snapshot.size > 25 ? page[page.length - 1].id : null };
+    });
+  }
+
+  async function cancelInvitationById({ idToken, spaceId, invitationId: targetId }) {
+    const caller = await identity(idToken);
+    if (typeof targetId !== "string" || !invitationIdPattern.test(targetId)) throw unavailable();
+    const { space, member } = refs(spaceId, caller.uid);
+    const invite = space.collection("invitations").doc(targetId);
+    await db.runTransaction(async (tx) => {
+      const [spaceSnap, managerSnap, inviteSnap] = await tx.getAll(space, member, invite);
+      if (!isManager(spaceSnap, managerSnap) || spaceSnap.data().managerUid !== caller.uid) throw unauthorized();
+      if (!inviteSnap.exists || inviteSnap.data().status !== "pending" || inviteSnap.data().invitationVersion !== invitationVersion(spaceSnap.data()) || inviteSnap.data().expiresAt <= now()) throw unavailable();
       tx.update(invite, { status: "cancelled", cancelledAt: FieldValue.serverTimestamp() });
     });
   }
@@ -144,5 +179,5 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       tx.delete(link);
     });
   }
-  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, removeMember };
+  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember };
 }

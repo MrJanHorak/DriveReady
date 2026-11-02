@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
 
 test("manager, invited supervisor and learner can join only the intended space", async ({ browser }) => {
   if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.FIREBASE_AUTH_EMULATOR_HOST !== "127.0.0.1:9099") throw new Error("Local emulators are required.");
@@ -48,8 +49,23 @@ test("manager, invited supervisor and learner can join only the intended space",
     await outsider.getByRole("button", { name: "Review invitation" }).click();
     await expect(outsider.getByText("Could not confirm the request.", { exact: false })).toBeVisible();
     await expect(outsider.getByRole("button", { name: "Accept invitation" })).toHaveCount(0);
+    const cancelledInvite = await makeInvite(emails[3], "supervisor");
+    await expect(manager.getByRole("list", { name: "Pending invitations" })).toContainText(emails[3]);
+    await manager.getByRole("button", { name: `Cancel invitation for ${emails[3]}` }).click();
+    await manager.getByRole("button", { name: "Keep invitation" }).click();
+    await manager.getByRole("button", { name: `Cancel invitation for ${emails[3]}` }).click();
+    await manager.getByRole("button", { name: "Confirm cancellation" }).click();
+    await expect(manager.getByText("Invitation cancelled.")).toBeVisible();
+    await expect(manager.getByRole("list", { name: "Pending invitations" })).not.toContainText(emails[3]);
+    await outsider.getByRole("button", { name: "Refresh spaces" }).click();
+    await outsider.getByLabel("Received space ID").fill(cancelledInvite.spaceId);
+    await outsider.getByLabel("Received invitation code").fill(cancelledInvite.token);
+    await outsider.getByRole("button", { name: "Review invitation" }).click();
+    await expect(outsider.getByText("Could not confirm the request.", { exact: false })).toBeVisible();
+    let supervisor;
     for (const [email, invite, role] of [[emails[1], supervisorInvite, "supervisor"], [emails[2], learnerInvite, "learner"]]) {
       const page = await login(email);
+      if (role === "supervisor") supervisor = page;
       await page.getByLabel("Received space ID").fill(invite.spaceId);
       await page.getByLabel("Received invitation code").fill(invite.token);
       await page.getByRole("button", { name: "Review invitation" }).click();
@@ -62,7 +78,32 @@ test("manager, invited supervisor and learner can join only the intended space",
       await expect(list).toContainText(`First learner · ${role}`);
       await expect(list).not.toContainText("Second learner");
       await expect(list).not.toContainText("Third learner");
+      await expect(page.getByRole("list", { name: "People with access" })).toHaveCount(0);
+      await expect(page.getByRole("list", { name: "Pending invitations" })).toHaveCount(0);
     }
+    const pending = await makeInvite(emails[3], "supervisor");
+    await manager.getByRole("button", { name: "Refresh people" }).click();
+    const people = manager.getByRole("list", { name: "People with access" });
+    await expect(people).toContainText(`${emails[1]} · supervisor`);
+    await expect(people).toContainText(`${emails[2]} · learner`);
+    await manager.getByRole("button", { name: `Remove ${emails[1]}` }).click();
+    await expect(manager.getByText(/all pending invitations for this space will be invalidated/)).toBeVisible();
+    await manager.getByRole("button", { name: "Keep access" }).click();
+    await expect(people).toContainText(`${emails[1]} · supervisor`);
+    await manager.getByRole("button", { name: `Remove ${emails[1]}` }).click();
+    await manager.getByRole("button", { name: "Confirm removal" }).click();
+    await expect(manager.getByText("Access removed. All pending invitations for this space were invalidated.")).toBeVisible();
+    await expect(people).not.toContainText(emails[1]);
+    await expect(people).toContainText(emails[2]);
+    await expect(manager.getByLabel("Invitation code to share")).toHaveCount(0);
+    await supervisor.getByRole("button", { name: "Refresh spaces" }).click();
+    await expect(supervisor.getByText("0 spaces", { exact: true })).toBeVisible();
+    await outsider.getByRole("button", { name: "Refresh spaces" }).click();
+    await outsider.getByLabel("Received space ID").fill(pending.spaceId);
+    await outsider.getByLabel("Received invitation code").fill(pending.token);
+    await outsider.getByRole("button", { name: "Review invitation" }).click();
+    await expect(outsider.getByText("Could not confirm the request.", { exact: false })).toBeVisible();
+    await expect(outsider.getByRole("button", { name: "Accept invitation" })).toHaveCount(0);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
     await deleteApp(adminApp);
@@ -116,6 +157,36 @@ test("pending shared and existing cloud operations block conflicting actions", a
     await expect(page.getByText(/Import finished: 1 copied/)).toBeVisible();
   } finally {
     release?.();
+    await context.close();
+    await deleteApp(adminApp);
+  }
+});
+
+test("manager can load another page of invitations", async ({ browser }) => {
+  if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.FIREBASE_AUTH_EMULATOR_HOST !== "127.0.0.1:9099") throw new Error("Local emulators are required.");
+  const adminApp = initializeApp({ projectId: "demo-driveready" }, "pages-browser-admin");
+  const email = `pages-${Date.now()}@example.test`, password = "synthetic-password-123";
+  const context = await browser.newContext();
+  try {
+    const user = await getAuth(adminApp).createUser({ email, password, emailVerified: true });
+    const db = getFirestore(adminApp), space = db.collection("spaces").doc();
+    const batch = db.batch();
+    batch.set(space, { learnerName: "Paged learner", status: "active", managerUid: user.uid, learnerUid: null, invitationVersion: 0 });
+    batch.set(space.collection("members").doc(user.uid), { role: "manager", active: true, emailAtJoining: email });
+    batch.set(db.doc(`users/${user.uid}/spaceLinks/${space.id}`), { spaceId: space.id });
+    for (let index = 0; index < 26; index++) batch.set(space.collection("invitations").doc(index.toString(16).padStart(64, "0")), { status: "pending", recipientEmail: `person-${index}@example.test`, role: "supervisor", invitationVersion: 0, managerUid: user.uid, expiresAt: Date.now() + 60_000 });
+    await batch.commit();
+    const page = await context.newPage();
+    await page.goto("http://127.0.0.1:4173/");
+    await page.getByLabel("Email", { exact: true }).fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    const list = page.getByRole("list", { name: "Pending invitations" });
+    await expect(list.getByRole("listitem")).toHaveCount(25);
+    await page.getByRole("button", { name: "Load more invitations" }).click();
+    await expect(list.getByRole("listitem")).toHaveCount(26);
+    await expect(page.getByRole("button", { name: "Load more invitations" })).toHaveCount(0);
+  } finally {
     await context.close();
     await deleteApp(adminApp);
   }
