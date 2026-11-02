@@ -20,7 +20,7 @@ Learners and manually entered driving logs are saved in the current browser's lo
 
 The route explorer and route creation wizard remain design previews with sample content and temporary state; routes are not published, location-aware, or suitable for navigation. State Requirements offers a Georgia overview and links to official sources, not a complete or personalized eligibility check; other states are not yet covered. The app has no backend, account system, or real mapping integration.
 
-See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the assessment and known gaps, [PRODUCT_PLAN.md](PRODUCT_PLAN.md) for the product vision and proposed phases, and [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for the Firebase work in progress. An early cloud-copy preview requires a configured Firebase project; edits in the main driving log do not sync.
+See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the assessment and known gaps, [PRODUCT_PLAN.md](PRODUCT_PLAN.md) for the product vision and proposed phases, and [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for the Firebase work in progress. With a configured Firebase project, signed-in users can explicitly choose local or cloud records; these copies do not sync automatically. Cloud integration remains in development and needs end-to-end and security review before use with real family data.
 
 ## Project structure
 

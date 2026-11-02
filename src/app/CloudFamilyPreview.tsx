@@ -43,7 +43,7 @@ export default function CloudFamily({ uid, onBusyChange }: { uid: string; onBusy
   }
   return <div className="mt-4 rounded-xl border border-[#0C7A8D]/20 bg-[#E4EFF2]/40 p-4">
     <h3 className="text-sm font-semibold">Cloud records · early preview</h3>
-    <p className="mt-1 text-sm text-muted-foreground">Copy existing browser records to your account. The drive log below still saves only in this browser; later edits are not synced yet.</p>
+    <p className="mt-1 text-sm text-muted-foreground">Copy existing browser records to your account. After copying, choose “Use cloud account” below to view and edit the cloud copy. Later local edits are not copied automatically.</p>
     {cloud && <p className="mt-2 text-sm">This account has {cloud.learners.length} {cloud.learners.length === 1 ? "learner" : "learners"} and {cloud.drives.length} {cloud.drives.length === 1 ? "drive" : "drives"} in cloud storage.</p>}
     {status && <p role="status" className="mt-2 text-sm text-muted-foreground">{status}</p>}
     <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={busy || !cloud} onClick={reviewImport} className="rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50">Review local records to copy</button><button type="button" disabled={busy} onClick={() => { setLocal(null); setRefreshKey((value) => value + 1); }} className="rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50">Refresh cloud count</button></div>

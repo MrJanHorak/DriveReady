@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from "react";
-import FamilyWorkspace from "./FamilyWorkspace";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import StateRequirements from "./StateRequirements";
 import {
   LayoutDashboard,
@@ -1422,7 +1422,7 @@ export default function App() {
       {activeNav === "routes" ? <>
         <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900"><strong>Design preview:</strong> These Augusta-area routes, maps, ratings, and safety notes are fictional examples. They are not location-aware or suitable for navigation. Route creation is a preview and does not save or publish.</div>
         <RouteExplorer onPublish={() => setWizardOpen(true)} />
-      </> : activeNav === "requirements" ? <StateRequirements /> : <FamilyWorkspace showAll={activeNav === "logs"} />}
+      </> : activeNav === "requirements" ? <StateRequirements /> : <WorkspaceSwitcher showAll={activeNav === "logs"} />}
     </div>
     {wizardOpen && <RouteWizard onClose={() => setWizardOpen(false)} />}
   </div>;

@@ -1,4 +1,5 @@
-import { collection, doc, getDocs, runTransaction } from "firebase/firestore";
+import { collection, doc, getDocsFromServer, runTransaction } from "firebase/firestore";
+import { parseFamilyBackup } from "./familyData.js";
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -14,9 +15,11 @@ function records(db, uid, kind) {
 // A separate document for each record avoids overwriting unrelated family data.
 export async function readCloudFamily(db, uid) {
   const [learners, drives] = await Promise.all([
-    getDocs(records(db, uid, "learners")), getDocs(records(db, uid, "drives")),
+    getDocsFromServer(records(db, uid, "learners")), getDocsFromServer(records(db, uid, "drives")),
   ]);
-  return { version: 1, learners: learners.docs.map((item) => item.data()), drives: drives.docs.map((item) => item.data()) };
+  const data = { version: 1, learners: learners.docs.map((item) => item.data()), drives: drives.docs.map((item) => item.data()) };
+  if (learners.docs.some((item) => item.id !== item.data().id) || drives.docs.some((item) => item.id !== item.data().id)) throw new Error("Cloud record identifiers do not match their paths.");
+  return parseFamilyBackup(JSON.stringify(data));
 }
 
 // Creates never overwrite records, including when a local import is retried.

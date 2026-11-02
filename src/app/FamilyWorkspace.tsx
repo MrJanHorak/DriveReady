@@ -3,7 +3,8 @@ import { emptyFamily, formatMinutes, locationMapUrl, placeMapUrl, readFamily, ro
 import PracticeCoverage, { PracticeChoices } from "./PracticeCoverage";
 import GettingStarted from "./GettingStarted";
 import FamilyBackup from "./FamilyBackup";
-import FirebaseAccount from "./FirebaseAccount";
+import { db } from "./firebaseClient";
+import { createCloudRecord, readCloudFamily, replaceCloudRecord } from "./cloudFamily";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
 
 type Learner = { id: string; name: string };
@@ -20,12 +21,16 @@ const today = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 
-export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean }) {
+export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingChange }: { showAll?: boolean; cloudUid?: string; onSavingChange?: (saving: boolean) => void }) {
   const [initial] = useState(() => {
+    if (cloudUid) return { data: emptyFamily() as Family, error: "" };
     try { return { data: readFamily(window.localStorage) as Family, error: "" }; }
     catch { return { data: emptyFamily() as Family, error: "Saved data could not be read. Your existing data has not been changed. Check your browser storage before continuing." }; }
   });
   const [family, setFamily] = useState<Family>(initial.data);
+  const [cloudLoading, setCloudLoading] = useState(!!cloudUid);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [storageBlocked, setStorageBlocked] = useState(!!initial.error);
   const [error, setError] = useState(initial.error);
   const [selectedId, setSelectedId] = useState(initial.data.learners[0]?.id ?? "");
@@ -50,6 +55,18 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
   const locationRequest = useRef(0);
   useEffect(() => () => { locationRequest.current += 1; }, []);
   const [formError, setFormError] = useState("");
+  useEffect(() => {
+    if (!cloudUid || !db) return;
+    let active = true;
+    readCloudFamily(db, cloudUid).then((data: Family) => {
+      if (!active) return;
+      setFamily(data); setSelectedId(data.learners[0]?.id ?? ""); setCloudLoading(false);
+    }).catch(() => {
+      if (!active) return;
+      setError("Could not load cloud records. Check your connection and refresh; no local records were changed."); setStorageBlocked(true); setCloudLoading(false);
+    });
+    return () => { active = false; };
+  }, [cloudUid]);
 
   function save(next: Family, restoring = false) {
     if (storageBlocked && !restoring) return false;
@@ -70,12 +87,27 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
     setSelectedId(next.learners[0]?.id ?? "");
     return true;
   }
-  function addLearner(event: React.FormEvent) {
+  async function saveCloud(kind: "learners" | "drives", record: Learner | Drive, original?: Drive) {
+    if (!db || !cloudUid || savingRef.current || cloudLoading || storageBlocked) return false;
+    savingRef.current = true; setSaving(true); onSavingChange?.(true); setError("");
+    try {
+      if (original) await replaceCloudRecord(db, cloudUid, kind, original, record);
+      else await createCloudRecord(db, cloudUid, kind, record);
+      return true;
+    } catch (failure) {
+      const text = failure instanceof Error && failure.message.includes("changed on another device") ? failure.message : "Could not save to your account. Check your connection and try again; the form is still open.";
+      setError(text); return false;
+    } finally { savingRef.current = false; setSaving(false); onSavingChange?.(false); }
+  }
+  async function addLearner(event: React.FormEvent) {
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
     const learner = { id: id(), name: trimmed };
-    if (save({ ...family, learners: [...family.learners, learner] })) {
+    const next = { ...family, learners: [...family.learners, learner] };
+    const saved = cloudUid ? await saveCloud("learners", learner) : save(next);
+    if (saved) {
+      if (cloudUid) setFamily(next);
       setSelectedId(learner.id); setName(""); setAdding(false); setEditing(null);
     }
   }
@@ -102,7 +134,7 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
       setLocationMessage("Could not get your location. Check browser permissions or enter a place or route link instead."); setLocating(false);
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   }
-  function saveDrive(event: React.FormEvent) {
+  async function saveDrive(event: React.FormEvent) {
     event.preventDefault();
     const total = Number(minutes), night = Number(nightMinutes);
     if (!selectedId || !date || !Number.isInteger(total) || total < 1 || !Number.isInteger(night) || night < 0 || night > total) {
@@ -116,20 +148,21 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
     const route = start && end ? { start, end, stops } : null;
     const drive: Drive = { ...editing, id: editing?.id ?? id(), learnerId: selectedId, date, minutes: total, nightMinutes: night, skills: skills.trim(), notes: notes.trim(), place: place.trim(), routeUrl: routeUrl.trim(), location, route, practicedSkills, practicedConditions };
     const drives = editing ? family.drives.map((item) => item.id === editing.id ? drive : item) : [...family.drives, drive];
-    if (save({ ...family, drives })) { setAdding(false); setEditing(null); }
+    const next = { ...family, drives };
+    const saved = cloudUid ? await saveCloud("drives", drive, editing ?? undefined) : save(next);
+    if (saved) { if (cloudUid) setFamily(next); setAdding(false); setEditing(null); }
   }
   const learner = family.learners.find((item) => item.id === selectedId);
   const summary = summarizeDrives(family.drives, selectedId);
   const drives = family.drives.filter((item) => item.learnerId === selectedId).sort((a, b) => b.date.localeCompare(a.date));
 
-  return <main className="flex-1 overflow-auto p-5 md:p-8">
-    <div className="mx-auto max-w-5xl space-y-5">
+  return <div className="space-y-5">
       <div className="rounded-xl border border-[#0C7A8D]/20 bg-[#E4EFF2] p-4 text-sm text-[#095969]">
-        <strong>Saved on this device.</strong> Profiles, logs, and any locations stay in this browser, are not synced, and can be lost if its data is cleared. Avoid sensitive personal details.
+        {cloudUid ? <><strong>Cloud account.</strong> Records save to the signed-in account after the server confirms them. Refresh to see changes from another device. Cloud setup is still in development.</> : <><strong>Saved on this device.</strong> Profiles, logs, and any locations stay in this browser, are not synced, and can be lost if its data is cleared. Avoid sensitive personal details.</>}
       </div>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-      {!showAll && <FirebaseAccount />}
-      {!showAll && <FamilyBackup family={family} canExport={!storageBlocked} onRestore={restore} />}
+      {!showAll && !cloudUid && <FamilyBackup family={family} canExport={!storageBlocked} onRestore={restore} />}
+      {cloudLoading && <p role="status" className="text-sm text-muted-foreground">Loading cloud records…</p>}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div><h2 className="text-xl font-bold">{showAll ? "Driving logs" : "Your family’s practice"}</h2><p className="mt-1 text-sm text-muted-foreground">A simple place to record practice and see how it adds up.</p></div>
         {family.learners.length > 0 && <label className="text-sm font-medium">Learner<select className={`${field} mt-1 min-w-48`} value={selectedId} onChange={(e) => { locationRequest.current += 1; setLocating(false); setSelectedId(e.target.value); setAdding(false); setEditing(null); }}>{family.learners.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
@@ -137,7 +170,7 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
       <section className="rounded-2xl border border-border bg-card p-5">
         <h3 className="font-semibold">{family.learners.length ? "Add another learner" : "Where to start"}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{family.learners.length ? "Keep each learner’s practice separate." : "Add a learner, then record a practice drive. A first name or nickname is enough."}</p>
-        <form onSubmit={addLearner} className="mt-3 flex flex-wrap gap-2"><label className="sr-only" htmlFor="learner-name">Learner name or nickname</label><input id="learner-name" className={`${field} max-w-xs`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Learner name or nickname" maxLength={60} required /><button className={secondary} disabled={storageBlocked}>Add learner</button></form>
+        <form onSubmit={addLearner} className="mt-3 flex flex-wrap gap-2"><label className="sr-only" htmlFor="learner-name">Learner name or nickname</label><input id="learner-name" className={`${field} max-w-xs`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Learner name or nickname" maxLength={60} required /><button className={secondary} disabled={storageBlocked || cloudLoading || saving}>{saving ? "Saving…" : "Add learner"}</button></form>
       </section>
       {!showAll && <GettingStarted drives={family.drives} learnerId={selectedId || undefined} />}
       {learner && <>
@@ -147,7 +180,7 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
         <p className="text-xs text-muted-foreground">Based on {summary.count} recorded {summary.count === 1 ? "drive" : "drives"}. Hours alone do not determine licensing eligibility or driving readiness.</p>
         {!showAll && <PracticeCoverage drives={family.drives} learnerId={selectedId} />}
         <section className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">{showAll ? "All drives" : "Recent drives"}</h3><p className="text-sm text-muted-foreground">Practice recorded for {learner.name}</p></div><button className={primary} onClick={() => startDrive()} disabled={storageBlocked}>Log a drive</button></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">{showAll ? "All drives" : "Recent drives"}</h3><p className="text-sm text-muted-foreground">Practice recorded for {learner.name}</p></div><button className={primary} onClick={() => startDrive()} disabled={storageBlocked || cloudLoading || saving}>Log a drive</button></div>
           {adding && <form onSubmit={saveDrive} className="mt-5 grid gap-4 rounded-xl border border-border bg-muted/30 p-4 sm:grid-cols-2">
             <h4 className="font-semibold sm:col-span-2">{editing ? "Edit drive" : "Log a drive"}</h4>
             <label className="text-sm font-medium">Date<input className={`${field} mt-1`} type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label>
@@ -162,11 +195,10 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
             <div className="space-y-2 rounded-lg border border-border bg-background p-3 sm:col-span-2"><p className="text-sm font-medium">Pin a location <span className="font-normal text-muted-foreground">(optional)</span></p><p className="text-xs text-muted-foreground">Capture your current position, such as the start of a drive. This is one point, not a recording of the route. Your browser will request permission; location may be approximate. Use this only while safely stopped.</p><div className="flex flex-wrap items-center gap-2"><button type="button" className={secondary} onClick={captureLocation} disabled={locating}>{locating ? "Finding location…" : location ? "Update current location" : "Use current location"}</button>{location && <><span className="text-xs text-muted-foreground">{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)} · accuracy ±{Math.ceil(location.accuracy)} m</span><button type="button" className={secondary} onClick={() => { locationRequest.current += 1; setLocating(false); setLocation(null); setLocationMessage(""); }}>Remove pin</button></>}</div>{locationMessage && <p role="status" className="text-xs text-muted-foreground">{locationMessage}</p>}</div>
             <label className="text-sm font-medium sm:col-span-2">Notes <span className="font-normal text-muted-foreground">(optional)</span><textarea className={`${field} mt-1`} value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} /></label>
             {formError && <p role="alert" className="text-sm text-red-700 sm:col-span-2">{formError}</p>}
-            <div className="flex gap-2 sm:col-span-2"><button className={primary} disabled={locating}>Save drive</button><button type="button" className={secondary} onClick={() => { locationRequest.current += 1; setLocating(false); setAdding(false); setEditing(null); }}>Cancel</button></div>
+            <div className="flex gap-2 sm:col-span-2"><button className={primary} disabled={locating || saving}>{saving ? "Saving…" : "Save drive"}</button><button type="button" className={secondary} disabled={saving} onClick={() => { locationRequest.current += 1; setLocating(false); setAdding(false); setEditing(null); }}>Cancel</button></div>
           </form>}
           {drives.length === 0 ? <p className="py-6 text-sm text-muted-foreground">No drives logged yet. Start with your next practice session.</p> : <div className="mt-4 divide-y divide-border">{(showAll ? drives : drives.slice(0, 5)).map((drive) => <article key={drive.id} className="flex flex-wrap items-start justify-between gap-3 py-4"><div><p className="font-medium">{drive.date} · {formatMinutes(drive.minutes)} <span className="text-sm font-normal text-muted-foreground">({formatMinutes(drive.nightMinutes)} at night)</span></p>{drive.place && <p className="mt-1 text-sm">Location: <a className="text-[#0C7A8D] underline" href={placeMapUrl(drive.place)} target="_blank" rel="noopener noreferrer">{drive.place}</a></p>}{drive.route && <p className="mt-1 text-sm">Route: {drive.route.start} → {drive.route.stops.length ? `${drive.route.stops.join(" → ")} → ` : ""}{drive.route.end} · <a className="text-[#0C7A8D] underline" href={routeMapUrl(drive.route)} target="_blank" rel="noopener noreferrer">View suggested route</a></p>}{drive.routeUrl && validRouteUrl(drive.routeUrl) && <p className="mt-1 text-sm"><a className="text-[#0C7A8D] underline" href={drive.routeUrl} target="_blank" rel="noopener noreferrer">Open saved map or route link</a></p>}{drive.location && <p className="mt-1 text-sm"><a className="text-[#0C7A8D] underline" href={locationMapUrl(drive.location)} target="_blank" rel="noopener noreferrer">View captured location on Google Maps</a> <span className="text-xs text-muted-foreground">(±{Math.ceil(drive.location.accuracy)} m; captured {new Date(drive.location.recordedAt).toLocaleString()})</span></p>}{drive.skills && <p className="mt-1 text-sm">{drive.skills}</p>}{drive.notes && <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{drive.notes}</p>}{(drive.practicedSkills?.length || drive.practicedConditions?.length) ? <p className="mt-1 text-sm text-muted-foreground">Recorded: {[...(drive.practicedSkills ?? []), ...(drive.practicedConditions ?? [])].join(", ")}</p> : null}</div><button className={secondary} onClick={() => startDrive(drive)}>Edit</button></article>)}</div>}
         </section>
       </>}
-    </div>
-  </main>;
+  </div>;
 }

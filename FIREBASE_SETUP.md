@@ -4,7 +4,9 @@ Firebase Authentication and Cloud Firestore have been selected for DriveReady. T
 
 ## Current status
 
-The driving log continues to use browser-local storage. With Firebase configuration and sign-in, an early preview can read account record counts and explicitly copy existing local records to account-scoped Firestore documents. It does not sync later edits or allow cloud log editing. `firestore.rules` passed initial owner-isolation tests against the locally available Firestore emulator, but it is not deployed and does not yet validate data shapes. Do not use this preview for real family data before security and data validation are reviewed.
+With Firebase configuration and sign-in, a supervisor can explicitly choose browser-local or account-scoped cloud records. The cloud workspace reads from Firestore and can create learners and create or edit logs; writes use transactions, and conflicting edits are rejected. Existing local records can be copied explicitly without deleting the originals or overwriting conflicting records. Switching modes closes an open form. Cloud reads require a connection and changes from another device require a manual refresh. Signing out returns to local mode; local data is still present on that device.
+
+`firestore.rules` passed initial owner-isolation tests against the locally available Firestore emulator, but it is not deployed and does not yet validate data shapes. The login and complete browser workflow still need end-to-end emulator tests; do not use this early integration for real family data before security and data validation are reviewed.
 
 ## Intended first model
 
@@ -18,8 +20,8 @@ The driving log continues to use browser-local storage. With Firebase configurat
 
 1. The Firebase web SDK and optional configuration are installed. Copy `.env.example` to `.env.local` and supply a Firebase web app configuration when ready. For emulators use a `demo-` project ID and set `VITE_FIREBASE_USE_EMULATORS=true`; this requires running local Auth and Firestore emulators. Never use emulator mode for a real project.
 2. Run `npm run test:rules` with Firebase CLI and Java 21+ installed. Initial Firestore emulator tests cover owner isolation, conflicting writes, and safe repeat imports. Add Authentication emulator tests and extend rules to validate data shapes and write constraints before production.
-3. Implement account-scoped cloud editing in the driving log. Make the storage mode and synchronization status visible, with explicit handling for offline and failed saves and changes on other devices.
-4. The early import preview preserves local data, skips identical records, and reports collisions. Test complete user flows including interrupted imports, authentication changes, reloads, and multi-device behavior before using it with real data.
+3. Account-scoped cloud editing is implemented with explicit mode selection, server-confirmed writes, and conflict checks. Add end-to-end tests for authentication, mode switching, logout during operations, failed saves, reloads, and multi-device behavior.
+4. The early import preview preserves local data, skips identical records, and reports collisions. Test complete user flows including interrupted imports before using it with real data.
 5. Create a Firebase project and web app when the user is ready, configure Authentication and Firestore, and deploy reviewed rules. Use separate development and production projects and review billing and region settings.
 
 The checked-in `firebase.json` configures local emulator ports and points to the proposed rules; it does not select a real project. A demo project ID should be supplied explicitly during local testing. Do not deploy with a demo ID or assume the rules have been tested merely because the configuration exists.
