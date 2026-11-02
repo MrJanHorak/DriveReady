@@ -13,6 +13,12 @@ export default function WorkspaceSwitcher({ showAll, onBusyChange }: { showAll: 
   const busy = saving || importing;
   useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
   useEffect(() => {
+    if (!busy) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [busy]);
+  useEffect(() => {
     if (!auth) return;
     return onAuthStateChanged(auth, (next) => {
       setUser(next);

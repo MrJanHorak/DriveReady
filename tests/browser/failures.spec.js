@@ -115,9 +115,13 @@ test("a pending cloud save blocks sign-out and a rejected save keeps the form", 
   await expect(page.getByRole("button", { name: "Driving Logs" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Review local records to copy" })).toBeDisabled();
   release();
-  await expect(page.getByRole("alert")).toContainText("Could not save to your account");
+  await expect(page.getByRole("alert")).toContainText("Could not confirm the cloud save");
   await expect(page.getByLabel("Total duration (minutes)")).toHaveValue("30");
+  await expect(page.getByRole("button", { name: "Save drive" })).toBeDisabled();
   await page.unroute("**/documents:commit");
+  await page.getByRole("button", { name: "Refresh cloud records" }).click();
+  await page.getByRole("button", { name: "Log a drive" }).click();
+  await page.getByLabel("Total duration (minutes)").fill("30");
   await page.getByRole("button", { name: "Save drive" }).click();
   await expect(page.getByText("30m", { exact: false }).first()).toBeVisible();
 });
