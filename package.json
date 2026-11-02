@@ -7,6 +7,7 @@
     "build": "vite build",
     "test": "node --test src/app/familyData.test.js",
     "test:rules": "firebase emulators:exec --only firestore --project demo-driveready \"node --test src/app/firestore.rules.test.js\"",
+    "test:firebase": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node --test src/app/firebase.integration.test.js\"",
     "dev": "vite"
   },
   "dependencies": {

@@ -145,6 +145,7 @@ export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingCha
     const stops = routeStops.split("\n").map((stop) => stop.trim()).filter(Boolean);
     if ((start || end || stops.length) && (!start || !end)) { setFormError("Enter both a start and destination for the route, or clear the route fields."); return; }
     if (stops.length > 3) { setFormError("Enter up to three route stops, one per line."); return; }
+    if (stops.some((stop) => stop.length > 200)) { setFormError("Each route stop must be 200 characters or fewer."); return; }
     const route = start && end ? { start, end, stops } : null;
     const drive: Drive = { ...editing, id: editing?.id ?? id(), learnerId: selectedId, date, minutes: total, nightMinutes: night, skills: skills.trim(), notes: notes.trim(), place: place.trim(), routeUrl: routeUrl.trim(), location, route, practicedSkills, practicedConditions };
     const drives = editing ? family.drives.map((item) => item.id === editing.id ? drive : item) : [...family.drives, drive];

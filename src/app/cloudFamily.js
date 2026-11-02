@@ -8,6 +8,27 @@ function canonical(value) {
 }
 const sameRecord = (left, right) => JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 
+// Check the whole import before writing anything. Firestore rules remain the authority.
+export function validateCloudImport(family) {
+  const parsed = parseFamilyBackup(JSON.stringify(family));
+  const keys = (value, allowed) => Object.keys(value).every((key) => allowed.includes(key));
+  const text = (value, max) => typeof value === "string" && value.length <= max;
+  const list = (value, max) => Array.isArray(value) && value.length <= max && value.every((item) => text(item, 200));
+  const id = (value) => text(value, 1500) && value.length > 0 && !value.includes("/");
+  const invalid = () => { throw new Error("Some local records do not fit cloud storage limits. No records were copied."); };
+  for (const learner of parsed.learners) {
+    if (!keys(learner, ["id", "name"]) || !id(learner.id) || !text(learner.name, 60) || !learner.name.trim()) invalid();
+  }
+  for (const drive of parsed.drives) {
+    if (!keys(drive, ["id", "learnerId", "date", "minutes", "nightMinutes", "skills", "notes", "place", "routeUrl", "route", "location", "practicedSkills", "practicedConditions"]) || !id(drive.id) || !id(drive.learnerId) || !text(drive.skills, 200) || !text(drive.notes, 1000) ||
+        (drive.place !== undefined && !text(drive.place, 200)) || (drive.routeUrl !== undefined && (!text(drive.routeUrl, 2048) || (drive.routeUrl !== "" && !/^https:\/\/[^ /]+/.test(drive.routeUrl)))) ||
+        (drive.practicedSkills !== undefined && !list(drive.practicedSkills, 8)) || (drive.practicedConditions !== undefined && !list(drive.practicedConditions, 8))) invalid();
+    if (drive.route != null && (!keys(drive.route, ["start", "end", "stops"]) || !text(drive.route.start, 200) || !text(drive.route.end, 200) || !list(drive.route.stops, 3))) invalid();
+    if (drive.location != null && (!keys(drive.location, ["latitude", "longitude", "accuracy", "recordedAt"]) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(drive.location.recordedAt))) invalid();
+  }
+  return parsed;
+}
+
 function records(db, uid, kind) {
   return collection(db, "users", uid, kind);
 }
@@ -52,6 +73,7 @@ export async function replaceCloudRecord(db, uid, kind, original, replacement) {
 // Import never overwrites cloud records. Partial runs can be retried safely;
 // collisions are reported for review rather than silently merged.
 export async function importCloudFamily(db, uid, family) {
+  family = validateCloudImport(family);
   const result = { created: 0, existing: 0, conflicts: 0 };
   const conflictedLearners = new Set();
   for (const [kind, entries] of [["learners", family.learners], ["drives", family.drives]]) {

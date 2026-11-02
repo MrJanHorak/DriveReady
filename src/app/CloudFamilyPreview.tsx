@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db } from "./firebaseClient";
-import { importCloudFamily, readCloudFamily } from "./cloudFamily";
-import { parseFamilyBackup, readFamily } from "./familyData";
+import { importCloudFamily, readCloudFamily, validateCloudImport } from "./cloudFamily";
+import { readFamily } from "./familyData";
 
 type Family = { version: number; learners: { id: string; name: string }[]; drives: { id: string }[] };
 
@@ -23,9 +23,9 @@ export default function CloudFamily({ uid, onBusyChange }: { uid: string; onBusy
   function reviewImport() {
     try {
       // Apply the same validation as a backup, without deleting or changing it.
-      setLocal(parseFamilyBackup(JSON.stringify(readFamily(window.localStorage))));
+      setLocal(validateCloudImport(readFamily(window.localStorage)));
       setStatus("");
-    } catch { setStatus("Local records could not be read. Nothing was imported."); setLocal(null); }
+    } catch { setStatus("Local records could not be read or contain fields outside cloud storage limits. Nothing was imported."); setLocal(null); }
   }
   async function doImport() {
     if (!db || !local || busy) return;

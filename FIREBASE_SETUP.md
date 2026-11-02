@@ -6,7 +6,9 @@ Firebase Authentication and Cloud Firestore have been selected for DriveReady. T
 
 With Firebase configuration and sign-in, a supervisor can explicitly choose browser-local or account-scoped cloud records. The cloud workspace reads from Firestore and can create learners and create or edit logs; writes use transactions, and conflicting edits are rejected. Existing local records can be copied explicitly without deleting the originals or overwriting conflicting records. Switching modes closes an open form. Cloud reads require a connection and changes from another device require a manual refresh. Signing out returns to local mode; local data is still present on that device.
 
-`firestore.rules` passed initial owner-isolation tests against the locally available Firestore emulator, but it is not deployed and does not yet validate data shapes. The login and complete browser workflow still need end-to-end emulator tests; do not use this early integration for real family data before security and data validation are reviewed.
+`firestore.rules` is not deployed. Local emulator tests cover owner isolation, document fields and types, learner references, stale edits, and retrying a partially completed import. Authentication and Firestore emulator integration tests cover account creation, sign-in, sign-out, separate accounts, and two clients editing the same record. These are SDK tests, not a complete browser end-to-end test. The rules add validation but do not fully validate every semantic detail (for example, whether a date is a real calendar date). Do not use this early integration for real family data before further security and data validation review.
+
+Cloud writes have stricter limits than the existing backup parser, including field lengths, at most three route stops and eight practice tags, and a UTC timestamp for a location. The import preview checks these limits before copying; older local records outside them must be corrected first. An interrupted import can leave earlier records copied and can be retried without overwriting existing records. Record-specific errors are still needed.
 
 ## Intended first model
 
@@ -19,9 +21,9 @@ With Firebase configuration and sign-in, a supervisor can explicitly choose brow
 ## Next implementation steps
 
 1. The Firebase web SDK and optional configuration are installed. Copy `.env.example` to `.env.local` and supply a Firebase web app configuration when ready. For emulators use a `demo-` project ID and set `VITE_FIREBASE_USE_EMULATORS=true`; this requires running local Auth and Firestore emulators. Never use emulator mode for a real project.
-2. Run `npm run test:rules` with Firebase CLI and Java 21+ installed. Initial Firestore emulator tests cover owner isolation, conflicting writes, and safe repeat imports. Add Authentication emulator tests and extend rules to validate data shapes and write constraints before production.
+2. Run `npm run test:rules` and `npm run test:firebase` with Firebase CLI and Java 21+ installed. On this machine, Android Studio's bundled Java 25 can be put first in `PATH` for these commands. Review the rules and reconcile cloud validation with local backup and import validation before production.
 3. Account-scoped cloud editing is implemented with explicit mode selection, server-confirmed writes, and conflict checks. Add end-to-end tests for authentication, mode switching, logout during operations, failed saves, reloads, and multi-device behavior.
-4. The early import preview preserves local data, skips identical records, and reports collisions. Test complete user flows including interrupted imports before using it with real data.
+4. The early import preview preserves local data, skips identical records, and reports collisions. Test complete user flows including actual interrupted imports before using it with real data.
 5. Create a Firebase project and web app when the user is ready, configure Authentication and Firestore, and deploy reviewed rules. Use separate development and production projects and review billing and region settings.
 
 The checked-in `firebase.json` configures local emulator ports and points to the proposed rules; it does not select a real project. A demo project ID should be supplied explicitly during local testing. Do not deploy with a demo ID or assume the rules have been tested merely because the configuration exists.

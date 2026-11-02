@@ -1,15 +1,55 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Initial single-supervisor model. No public or cross-account access.
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      match /learners/{learnerId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-      match /drives/{driveId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
+    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function text(value, max) { return value is string && value.size() <= max; }
+    function stringAt(list, index) { return list.size() <= index || text(list[index], 200); }
+    function stringList(value, max) {
+      return value is list && value.size() <= max &&
+        stringAt(value, 0) && stringAt(value, 1) && stringAt(value, 2) && stringAt(value, 3) &&
+        stringAt(value, 4) && stringAt(value, 5) && stringAt(value, 6) && stringAt(value, 7);
+    }
+    function learner(data, id) {
+      return data.keys().hasOnly(['id', 'name']) && data.keys().hasAll(['id', 'name']) &&
+        data.id == id && text(data.name, 60) && data.name.matches('.*\\S.*');
+    }
+    function route(value) {
+      return value == null || (value is map && value.keys().hasOnly(['start', 'end', 'stops']) &&
+        value.keys().hasAll(['start', 'end', 'stops']) && text(value.start, 200) &&
+        text(value.end, 200) && stringList(value.stops, 3));
+    }
+    function location(value) {
+      return value == null || (value is map && value.keys().hasOnly(['latitude', 'longitude', 'accuracy', 'recordedAt']) &&
+        value.keys().hasAll(['latitude', 'longitude', 'accuracy', 'recordedAt']) &&
+        value.latitude is number && value.latitude >= -90 && value.latitude <= 90 &&
+        value.longitude is number && value.longitude >= -180 && value.longitude <= 180 &&
+        value.accuracy is number && value.accuracy >= 0 && text(value.recordedAt, 40) &&
+        value.recordedAt.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$'));
+    }
+    function drive(data, id) {
+      return data.keys().hasOnly(['id', 'learnerId', 'date', 'minutes', 'nightMinutes', 'skills', 'notes', 'place', 'routeUrl', 'route', 'location', 'practicedSkills', 'practicedConditions']) &&
+        data.keys().hasAll(['id', 'learnerId', 'date', 'minutes', 'nightMinutes', 'skills', 'notes']) &&
+        data.id == id && data.learnerId is string && data.learnerId.size() > 0 &&
+        data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        data.minutes is int && data.minutes >= 1 && data.nightMinutes is int && data.nightMinutes >= 0 && data.nightMinutes <= data.minutes &&
+        text(data.skills, 200) && text(data.notes, 1000) &&
+        (!('place' in data) || text(data.place, 200)) &&
+        (!('routeUrl' in data) || (text(data.routeUrl, 2048) && (data.routeUrl == '' || data.routeUrl.matches('^https://[^ /]+.*$')))) &&
+        (!('route' in data) || route(data.route)) && (!('location' in data) || location(data.location)) &&
+        (!('practicedSkills' in data) || stringList(data.practicedSkills, 8)) &&
+        (!('practicedConditions' in data) || stringList(data.practicedConditions, 8));
+    }
+    match /users/{uid}/learners/{id} {
+      allow read: if owner(uid);
+      allow create, update: if owner(uid) && learner(request.resource.data, id);
+    }
+    match /users/{uid}/drives/{id} {
+      allow read: if owner(uid);
+      allow create: if owner(uid) && drive(request.resource.data, id) &&
+        exists(/databases/$(database)/documents/users/$(uid)/learners/$(request.resource.data.learnerId));
+      allow update: if owner(uid) && drive(request.resource.data, id) &&
+        request.resource.data.learnerId == resource.data.learnerId &&
+        exists(/databases/$(database)/documents/users/$(uid)/learners/$(request.resource.data.learnerId));
     }
   }
 }
