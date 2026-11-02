@@ -83,6 +83,8 @@ Community routes and tips need reporting, moderation, and a way to flag outdated
 6. **Privacy and operations:** How will data deletion, retention, access to accounts belonging to minors, backups, recovery, and support work before real family data is used?
 7. **Launch and geography:** Anyone may sign up; define the practical rollout and initial Augusta seed coverage. Decide location precision and discovery radius without exposing homes or routines.
 
+The proposed role model, invitation boundaries, and migration requirements are documented in [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md). Invited supervisors should see the full practice history; learners should initially view shared notes and progress, with their own writing added later.
+
 ## Engineering starting point
 
 The current Figma-derived web interface is a prototype with sample routes. A Firebase development project supports an early single-supervisor cloud workspace, but learner sign-in, invitations, shared practice spaces, persistent routes, community voting, and reporting are not implemented. Do not infer that these features are ready from the plan. See [FIREBASE_SETUP.md](FIREBASE_SETUP.md) and [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for current implementation and security work; [PROJECT_STATUS.md](PROJECT_STATUS.md) is an earlier dated assessment. Preserve the prototype as a design reference while replacing simulated actions with real behavior.

@@ -1,7 +1,7 @@
 import { after, before, test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { assertFails, assertSucceeds, initializeTestEnvironment } from "@firebase/rules-unit-testing";
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, setDoc, writeBatch } from "firebase/firestore";
 import assert from "node:assert/strict";
 import { createCloudRecord, importCloudFamily, readCloudFamily, replaceCloudRecord } from "./cloudFamily.js";
 
@@ -59,6 +59,57 @@ test("a batch mixing authorized and unauthorized writes is rejected atomically",
   batch.set(other, { id: "b", name: "Bob learner" });
   await assertFails(batch.commit());
   assert.equal((await getDoc(own)).exists(), false);
+});
+
+test("shared-space foundation permits active members to read history and denies client writes", async () => {
+  await env.withSecurityRulesDisabled(async (admin) => {
+    const db = admin.firestore();
+    await setDoc(doc(db, "spaces/space-a"), { label: "Learner space" });
+    for (const [uid, role, active] of [["manager-a", "manager", true], ["supervisor-a", "supervisor", true], ["learner-a", "learner", true], ["removed-a", "supervisor", false], ["bad-role", "owner", true]]) {
+      await setDoc(doc(db, `spaces/space-a/members/${uid}`), { role, active });
+    }
+    await setDoc(doc(db, "spaces/space-a/drives/drive-a"), { notes: "Shared practice note" });
+    await setDoc(doc(db, "spaces/space-a/routes/route-a"), { title: "Private route" });
+    await setDoc(doc(db, "spaces/space-a/private/secret"), { text: "Not a shared path" });
+    await setDoc(doc(db, "spaces/space-b"), { label: "Other learner space" });
+    await setDoc(doc(db, "spaces/space-b/members/outsider"), { role: "manager", active: true });
+    await setDoc(doc(db, "spaces/space-b/drives/drive-b"), { notes: "Other history" });
+    await setDoc(doc(db, "users/learner-a/spaceLinks/space-a"), { spaceId: "space-a" });
+    await setDoc(doc(db, "users/outsider/spaceLinks/space-a"), { spaceId: "space-a" });
+  });
+  const manager = env.authenticatedContext("manager-a").firestore();
+  const supervisor = env.authenticatedContext("supervisor-a").firestore();
+  const learner = env.authenticatedContext("learner-a").firestore();
+  const outsider = env.authenticatedContext("outsider").firestore();
+  const removed = env.authenticatedContext("removed-a").firestore();
+  const invalidRole = env.authenticatedContext("bad-role").firestore();
+  const guest = env.unauthenticatedContext().firestore();
+  for (const db of [manager, supervisor, learner]) {
+    await assertSucceeds(getDocFromServer(doc(db, "spaces/space-a")));
+    assert.equal((await assertSucceeds(getDocFromServer(doc(db, "spaces/space-a/drives/drive-a")))).data().notes, "Shared practice note");
+    await assertSucceeds(getDocs(collection(db, "spaces/space-a/drives")));
+    await assertSucceeds(getDocFromServer(doc(db, "spaces/space-a/routes/route-a")));
+    await assertFails(setDoc(doc(db, "spaces/space-a/drives/new"), { notes: "Cannot write yet" }));
+    await assertFails(setDoc(doc(db, "spaces/space-a/members/outsider"), { role: "manager", active: true }));
+    await assertFails(setDoc(doc(db, "spaces/space-a"), { label: "Cannot alter yet" }));
+    await assertFails(deleteDoc(doc(db, "spaces/space-a/drives/drive-a")));
+    await assertFails(getDocFromServer(doc(db, "spaces/space-a/private/secret")));
+  }
+  await assertSucceeds(getDocFromServer(doc(outsider, "spaces/space-b/drives/drive-b")));
+  await assertFails(getDocFromServer(doc(manager, "spaces/space-b/drives/drive-b")));
+  for (const db of [outsider, removed, invalidRole, guest]) {
+    await assertFails(getDocFromServer(doc(db, "spaces/space-a/drives/drive-a")));
+    await assertFails(getDocs(collection(db, "spaces/space-a/drives")));
+  }
+  await assertSucceeds(getDocs(collection(manager, "spaces/space-a/members")));
+  await assertFails(getDocs(collection(supervisor, "spaces/space-a/members")));
+  await assertSucceeds(getDocFromServer(doc(learner, "spaces/space-a/members/learner-a")));
+  await assertFails(getDocFromServer(doc(learner, "spaces/space-a/members/manager-a")));
+  await assertSucceeds(getDocFromServer(doc(outsider, "users/outsider/spaceLinks/space-a")));
+  await assertFails(setDoc(doc(outsider, "users/outsider/spaceLinks/forged"), { spaceId: "space-a" }));
+  await assertFails(getDocFromServer(doc(outsider, "users/learner-a/spaceLinks/space-a")));
+  await env.withSecurityRulesDisabled(async (admin) => setDoc(doc(admin.firestore(), "spaces/space-a/members/learner-a"), { role: "learner", active: false }));
+  await assertFails(getDocFromServer(doc(learner, "spaces/space-a/drives/drive-a")));
 });
 
 test("rules reject malformed records, orphaned drives, moves and deletes", async () => {

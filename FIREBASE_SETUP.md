@@ -17,6 +17,7 @@ Cloud writes have stricter limits than the existing backup parser, including fie
 - A supervisor authenticates with Firebase Authentication.
 - A supervisor's initial private records live under `users/{uid}/learners/{learnerId}` and `users/{uid}/drives/{driveId}`. Store records separately so edits do not overwrite a whole household or hit Firestore's single-document size limit.
 - The first version is single-supervisor only. Family invitations, learner access, community routes, and sharing require an explicit membership model and separate authorization rules before being enabled.
+- [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md) proposes the learner-centered membership model and migration requirements. A read-only foundation exists in the local rules and emulator tests; it is not deployed or wired into the app. The deployed `users/{uid}` rules do not grant shared access.
 - Do not silently copy browser-local records to the cloud. Provide an explicit review and import flow that preserves the original records and handles existing cloud data and repeated imports safely.
 - Design for failed or pending writes, multi-device conflicts, logout, backup/export, and privacy of location history. Do not report a change as saved until the appropriate persistence result is known.
 

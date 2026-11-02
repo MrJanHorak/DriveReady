@@ -2,6 +2,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    // Shared-space foundation is read-only until trusted membership management exists.
+    function activeMember(spaceId) {
+      let path = /databases/$(database)/documents/spaces/$(spaceId)/members/$(request.auth.uid);
+      return request.auth != null && exists(path) && get(path).data.active == true &&
+        get(path).data.role in ['manager', 'supervisor', 'learner'];
+    }
+    function spaceManager(spaceId) {
+      return activeMember(spaceId) &&
+        get(/databases/$(database)/documents/spaces/$(spaceId)/members/$(request.auth.uid)).data.role == 'manager';
+    }
     function text(value, max) { return value is string && value.size() <= max; }
     function stringAt(list, index) { return list.size() <= index || text(list[index], 200); }
     function stringList(value, max) {
@@ -62,6 +72,24 @@ service cloud.firestore {
       allow update: if owner(uid) && drive(request.resource.data, id) &&
         request.resource.data.learnerId == resource.data.learnerId &&
         exists(/databases/$(database)/documents/users/$(uid)/learners/$(request.resource.data.learnerId));
+    }
+    match /users/{uid}/spaceLinks/{spaceId} {
+      allow read: if owner(uid);
+      // The trusted service will maintain these links; they do not grant access.
+    }
+    match /spaces/{spaceId} {
+      allow get: if activeMember(spaceId);
+      match /members/{uid} {
+        allow get: if activeMember(spaceId) && (owner(uid) || spaceManager(spaceId));
+        allow list: if spaceManager(spaceId);
+      }
+      match /drives/{driveId} {
+        allow read: if activeMember(spaceId);
+      }
+      match /routes/{routeId} {
+        allow read: if activeMember(spaceId);
+      }
+      // No client writes, invites, membership changes or unrecognized paths.
     }
   }
 }
