@@ -10,6 +10,14 @@ Working design, November 2, 2026. A local, read-only Firestore rules foundation 
 - The learner has their own login and can see routes, shared notes, and progress. For the first version the learner views notes and progress; creating their own notes comes later. Feedback and theory lessons are future capabilities.
 - Anyone may sign up. Signup alone does not grant access to a learner's space. Public route contributions, voting, reporting, and moderation are a separate design and must not expose private history.
 
+## More than one learner
+
+A managing supervisor can manage separate spaces for two, three, or more learners at the same time, whether they are twins, different ages, relatives, or unrelated people. The model has no fixed two-learner limit; the eventual dashboard and service must be tested for usable performance with larger numbers. The proposed experience is a single dashboard listing each learner the signed-in person is authorized to access, with a clear way to choose the active learner. Each learner has their own account, routes in their space, practice history, notes, and progress. Their records are not combined simply because they share a supervisor.
+
+The manager may invite the same adult to both spaces, or different adults to each. Each invitation and membership is scoped to the selected learner; an invitation to one space does not automatically grant access to another. A future convenience flow could let the manager select multiple learners in one invitation, but it must show and confirm the access granted to each. Each learner sees only spaces to which that learner's account has been explicitly granted access, unless a separate sharing policy is later designed.
+
+Multiple learners may select the same community route. A drive belongs to the learner who drove, so recording practice for one learner must not automatically add hours or a trip to another learner's history. A supervisor can record a separate drive for each learner when appropriate. Public route-use counts, if implemented, need separately defined aggregation and must not expose who drove or link siblings' activity.
+
 ## Proposed first permission model
 
 These are implementation defaults derived from the requirements. The detailed write and membership policies below should be reviewed before implementation.
@@ -73,6 +81,6 @@ This migration design is not implemented. The current import flow is not a share
 - Test manager, invited supervisor, learner, unrelated signed-in user, and signed-out user against every read and write, including cross-space paths, collection queries, batches, forged roles and actor IDs, and unsupported paths.
 - Test invitation acceptance by the intended recipient, the wrong account, replay, expiry, revocation, simultaneous acceptance, and a manager losing permission while an invitation is pending. Test removing a member during reads, writes, open sessions, and device reconnects.
 - Test learner read-only permissions, full history for invited supervisors, notes visibility, actor versus reported-supervisor attribution, and changing or removing the reported supervisor.
-- Test multi-learner managers, a person with different roles in different spaces, stale clients and simultaneous edits, interrupted migration, retries, collisions, locked source writes, verification, and rollback.
+- Test multi-learner managers, different invited supervisors per learner, each learner's isolation from the others' private history, a person with different roles in different spaces, stale clients and simultaneous edits, interrupted migration, retries, collisions, locked source writes, verification, and rollback. The local rules tests include a read-only four-learner case; the dashboard and membership service are not implemented.
 - Test exports, recovery, and deletion separately from authorization. Verify that public route data and aggregated counts cannot reveal private trip details.
 - Review rules and trusted service authorization independently, then test with synthetic accounts in the development project before considering production or real family data.

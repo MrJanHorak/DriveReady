@@ -112,6 +112,47 @@ test("shared-space foundation permits active members to read history and denies 
   await assertFails(getDocFromServer(doc(learner, "spaces/space-a/drives/drive-a")));
 });
 
+test("one manager can access several learners while each learner and invited adult stay scoped", async () => {
+  await env.withSecurityRulesDisabled(async (admin) => {
+    const db = admin.firestore();
+    for (const [space, learner, note] of [["twins-one", "twin-one", "First learner's practice"], ["twins-two", "twin-two", "Second learner's practice"], ["learner-three", "third", "Third learner's practice"], ["learner-four", "fourth", "Fourth learner's practice"]]) {
+      await setDoc(doc(db, `spaces/${space}`), { label: space });
+      await setDoc(doc(db, `spaces/${space}/members/parent`), { role: "manager", active: true });
+      await setDoc(doc(db, `spaces/${space}/members/${learner}`), { role: "learner", active: true });
+      await setDoc(doc(db, `spaces/${space}/members/shared-adult`), { role: "supervisor", active: true });
+      await setDoc(doc(db, `spaces/${space}/drives/log`), { notes: note });
+      await setDoc(doc(db, `users/parent/spaceLinks/${space}`), { spaceId: space });
+    }
+    await setDoc(doc(db, "spaces/twins-one/members/first-only-adult"), { role: "supervisor", active: true });
+  });
+  const parent = env.authenticatedContext("parent").firestore();
+  const first = env.authenticatedContext("twin-one").firestore();
+  const second = env.authenticatedContext("twin-two").firestore();
+  const both = env.authenticatedContext("shared-adult").firestore();
+  const firstOnly = env.authenticatedContext("first-only-adult").firestore();
+  assert.equal((await assertSucceeds(getDocs(collection(parent, "users/parent/spaceLinks")))).size, 4);
+  for (const db of [parent, both]) {
+    assert.equal((await assertSucceeds(getDocFromServer(doc(db, "spaces/twins-one/drives/log")))).data().notes, "First learner's practice");
+    assert.equal((await assertSucceeds(getDocFromServer(doc(db, "spaces/twins-two/drives/log")))).data().notes, "Second learner's practice");
+    assert.equal((await assertSucceeds(getDocFromServer(doc(db, "spaces/learner-three/drives/log")))).data().notes, "Third learner's practice");
+    assert.equal((await assertSucceeds(getDocFromServer(doc(db, "spaces/learner-four/drives/log")))).data().notes, "Fourth learner's practice");
+  }
+  await assertSucceeds(getDocFromServer(doc(first, "spaces/twins-one/drives/log")));
+  await assertFails(getDocFromServer(doc(first, "spaces/twins-two/drives/log")));
+  await assertSucceeds(getDocFromServer(doc(second, "spaces/twins-two/drives/log")));
+  await assertFails(getDocFromServer(doc(second, "spaces/twins-one/drives/log")));
+  await assertSucceeds(getDocFromServer(doc(firstOnly, "spaces/twins-one/drives/log")));
+  await assertFails(getDocFromServer(doc(firstOnly, "spaces/twins-two/drives/log")));
+  await assertFails(getDocFromServer(doc(firstOnly, "spaces/learner-three/drives/log")));
+  for (const [uid, space] of [["third", "learner-three"], ["fourth", "learner-four"]]) {
+    const learner = env.authenticatedContext(uid).firestore();
+    await assertSucceeds(getDocFromServer(doc(learner, `spaces/${space}/drives/log`)));
+    await assertFails(getDocFromServer(doc(learner, "spaces/twins-one/drives/log")));
+    await assertFails(getDocFromServer(doc(learner, `spaces/${space === "learner-three" ? "learner-four" : "learner-three"}/drives/log`)));
+  }
+  await assertFails(setDoc(doc(first, "users/twin-one/spaceLinks/twins-two"), { spaceId: "twins-two" }));
+});
+
 test("rules reject malformed records, orphaned drives, moves and deletes", async () => {
   const db = env.authenticatedContext("validation-owner").firestore();
   const learnerRef = doc(db, "users/validation-owner/learners/a");

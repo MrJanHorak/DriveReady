@@ -33,6 +33,7 @@ The product is a toolkit, not a required lesson-by-lesson curriculum. A welcomin
 Proposed capabilities:
 
 - Supervisor-managed learner spaces, learner sign-in, and invitations for specific trusted adults. Avoid assuming all supervisors have the same family relationship. Decide exactly who can invite, view, record, edit, or remove information before implementing permissions.
+- A supervisor can manage multiple learners at once, including twins or learners of different ages. Each learner has separate routes, logs, notes, progress, and access; the same invited adult can be authorized for one or more learners without automatically receiving access to all of them.
 - An optional “Where to start” flow, with suggestions tailored to experience and location and a clear way to explore independently.
 - A flexible catalog of skills, driving environments, conditions, and short learning tips.
 - Manual drive logs containing date, duration, day/night, skills and conditions practiced, route information, notes, and the supervisor reported as present. Support editing and correcting entries. Define how route-use counts respond to edits and repeated logs.
