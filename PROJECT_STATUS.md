@@ -10,6 +10,7 @@ DriveReady appears intended to help families or other supervisors guide learner 
 
 - A React, Vite, and Tailwind desktop-oriented interface, based on a Figma export.
 - Learner creation and manual drive logs, including edits and per-learner day/night totals, stored locally in the current browser.
+- Manual JSON backup and restore, with validation and explicit confirmation before replacing browser data.
 - A Georgia requirements overview linking to DDS resources; it does not determine eligibility and other states are not yet covered.
 - A route explorer with sample routes, search and filters, a diagrammatic map, selection, zoom, and temporary favorites.
 - A three-step route creation interface with waypoint drawing, skills, difficulty, and safety fields. Its publish action only closes the wizard.
@@ -17,7 +18,7 @@ DriveReady appears intended to help families or other supervisors guide learner 
 
 ## Gaps and risks to resolve
 
-- **Real workflows and data:** Learner profiles and drive logs persist only in this browser; there is no backend, sync, or backup. Route and community data remain examples.
+- **Real workflows and data:** Learner profiles and drive logs persist only in this browser. Manual backup is available, but there is no backend, sync, or automatic backup. Route and community data remain examples.
 - **Navigation and controls:** The route explorer remains a design preview, and some visible actions have no behavior, including Use Route. Search matches route title, neighborhood, or skill rather than the advertised ZIP code or school search.
 - **Maps and sharing:** Maps and waypoints are SVG illustrations, not geographic routes or navigation. Publishing does not save or share data, and favorites are temporary.
 - **Trust and safety:** Sample route and safety descriptions should not be treated as real-world guidance. The Georgia overview links to authoritative sources, but a sustained update process and further review are needed before any eligibility calculations. Community publishing would also need a safety and moderation approach.

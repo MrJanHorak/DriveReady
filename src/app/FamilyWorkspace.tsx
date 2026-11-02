@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { emptyFamily, formatMinutes, locationMapUrl, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validRouteUrl } from "./familyData";
 import PracticeCoverage, { PracticeChoices } from "./PracticeCoverage";
 import GettingStarted from "./GettingStarted";
+import FamilyBackup from "./FamilyBackup";
+import FirebaseAccount from "./FirebaseAccount";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
 
 type Learner = { id: string; name: string };
@@ -24,6 +26,7 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
     catch { return { data: emptyFamily() as Family, error: "Saved data could not be read. Your existing data has not been changed. Check your browser storage before continuing." }; }
   });
   const [family, setFamily] = useState<Family>(initial.data);
+  const [storageBlocked, setStorageBlocked] = useState(!!initial.error);
   const [error, setError] = useState(initial.error);
   const [selectedId, setSelectedId] = useState(initial.data.learners[0]?.id ?? "");
   const [name, setName] = useState("");
@@ -48,17 +51,24 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
   useEffect(() => () => { locationRequest.current += 1; }, []);
   const [formError, setFormError] = useState("");
 
-  function save(next: Family) {
-    if (initial.error) return false;
+  function save(next: Family, restoring = false) {
+    if (storageBlocked && !restoring) return false;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       setFamily(next);
+      setStorageBlocked(false);
       setError("");
       return true;
     } catch {
       setError("Your changes could not be saved in this browser. Check browser storage and try again.");
       return false;
     }
+  }
+  function restore(next: Family) {
+    if (!save(next, true)) return false;
+    locationRequest.current += 1; setLocating(false); setAdding(false); setEditing(null);
+    setSelectedId(next.learners[0]?.id ?? "");
+    return true;
   }
   function addLearner(event: React.FormEvent) {
     event.preventDefault();
@@ -118,6 +128,8 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
         <strong>Saved on this device.</strong> Profiles, logs, and any locations stay in this browser, are not synced, and can be lost if its data is cleared. Avoid sensitive personal details.
       </div>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {!showAll && <FirebaseAccount />}
+      {!showAll && <FamilyBackup family={family} canExport={!storageBlocked} onRestore={restore} />}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div><h2 className="text-xl font-bold">{showAll ? "Driving logs" : "Your family’s practice"}</h2><p className="mt-1 text-sm text-muted-foreground">A simple place to record practice and see how it adds up.</p></div>
         {family.learners.length > 0 && <label className="text-sm font-medium">Learner<select className={`${field} mt-1 min-w-48`} value={selectedId} onChange={(e) => { locationRequest.current += 1; setLocating(false); setSelectedId(e.target.value); setAdding(false); setEditing(null); }}>{family.learners.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
@@ -125,7 +137,7 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
       <section className="rounded-2xl border border-border bg-card p-5">
         <h3 className="font-semibold">{family.learners.length ? "Add another learner" : "Where to start"}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{family.learners.length ? "Keep each learner’s practice separate." : "Add a learner, then record a practice drive. A first name or nickname is enough."}</p>
-        <form onSubmit={addLearner} className="mt-3 flex flex-wrap gap-2"><label className="sr-only" htmlFor="learner-name">Learner name or nickname</label><input id="learner-name" className={`${field} max-w-xs`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Learner name or nickname" maxLength={60} required /><button className={secondary} disabled={!!initial.error}>Add learner</button></form>
+        <form onSubmit={addLearner} className="mt-3 flex flex-wrap gap-2"><label className="sr-only" htmlFor="learner-name">Learner name or nickname</label><input id="learner-name" className={`${field} max-w-xs`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Learner name or nickname" maxLength={60} required /><button className={secondary} disabled={storageBlocked}>Add learner</button></form>
       </section>
       {!showAll && <GettingStarted drives={family.drives} learnerId={selectedId || undefined} />}
       {learner && <>
@@ -135,7 +147,7 @@ export default function FamilyWorkspace({ showAll = false }: { showAll?: boolean
         <p className="text-xs text-muted-foreground">Based on {summary.count} recorded {summary.count === 1 ? "drive" : "drives"}. Hours alone do not determine licensing eligibility or driving readiness.</p>
         {!showAll && <PracticeCoverage drives={family.drives} learnerId={selectedId} />}
         <section className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">{showAll ? "All drives" : "Recent drives"}</h3><p className="text-sm text-muted-foreground">Practice recorded for {learner.name}</p></div><button className={primary} onClick={() => startDrive()} disabled={!!initial.error}>Log a drive</button></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">{showAll ? "All drives" : "Recent drives"}</h3><p className="text-sm text-muted-foreground">Practice recorded for {learner.name}</p></div><button className={primary} onClick={() => startDrive()} disabled={storageBlocked}>Log a drive</button></div>
           {adding && <form onSubmit={saveDrive} className="mt-5 grid gap-4 rounded-xl border border-border bg-muted/30 p-4 sm:grid-cols-2">
             <h4 className="font-semibold sm:col-span-2">{editing ? "Edit drive" : "Log a drive"}</h4>
             <label className="text-sm font-medium">Date<input className={`${field} mt-1`} type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label>

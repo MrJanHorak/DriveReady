@@ -87,4 +87,4 @@ Community routes and tips need reporting, moderation, and a way to flag outdated
 
 ## Engineering starting point
 
-The current Figma-derived web interface is a prototype with sample data. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for its current gaps and [README.md](README.md) for local setup. Before choosing providers or building broad features, define the first end-to-end workflow and data model, establish version control and appropriate automated checks, and decide on the initial hosting and privacy requirements. Preserve the existing prototype as a design reference while replacing simulated actions with real behavior.
+The current Figma-derived web interface is a prototype with sample data. Firebase Authentication and Cloud Firestore are the selected direction for accounts and shared persistence; the initial work will be local before creating a cloud project. See [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for the implementation and security plan, [PROJECT_STATUS.md](PROJECT_STATUS.md) for current gaps, and [README.md](README.md) for local setup. Preserve the existing prototype as a design reference while replacing simulated actions with real behavior.

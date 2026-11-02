@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { emptyFamily, formatMinutes, locationMapUrl, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validRouteUrl } from "./familyData.js";
+import { emptyFamily, formatMinutes, locationMapUrl, parseFamilyBackup, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validRouteUrl } from "./familyData.js";
 import { practiceCoverage, PRACTICE_SKILLS, unrecordedSkills } from "./practiceData.js";
 
 test("new browser starts with an empty family and saved data can be read back", () => {
@@ -78,4 +78,18 @@ test("unrecorded practice ideas reflect only the selected learner's tags", () =>
   assert.equal(unrecordedSkills(drives, "a").includes("Parking"), true);
   assert.deepEqual(unrecordedSkills([], "a"), PRACTICE_SKILLS);
   assert.deepEqual(unrecordedSkills([{ learnerId: "a", date: "2026-01-01", practicedSkills: PRACTICE_SKILLS }], "a"), []);
+});
+
+test("backups preserve old and new drive fields and reject incompatible or corrupt records", () => {
+  const drive = { id: "d", learnerId: "a", date: "2026-11-01", minutes: 30, nightMinutes: 5, skills: "rain", notes: "Good", practicedSkills: ["Turns"], route: { start: "Evans", end: "Augusta", stops: [] }, location: { latitude: 33.5, longitude: -82, accuracy: 10, recordedAt: "2026-11-01T12:00:00.000Z" } };
+  const family = { version: 1, learners: [{ id: "a", name: "Alex" }], drives: [drive] };
+  assert.deepEqual(parseFamilyBackup(JSON.stringify(family)), family);
+  assert.deepEqual(parseFamilyBackup(JSON.stringify(emptyFamily())), emptyFamily());
+  assert.throws(() => parseFamilyBackup("bad json"));
+  assert.throws(() => parseFamilyBackup(JSON.stringify({ ...family, version: 2 })));
+  assert.throws(() => parseFamilyBackup(JSON.stringify({ ...family, learners: [] })));
+  assert.throws(() => parseFamilyBackup(JSON.stringify({ ...family, drives: [drive, drive] })));
+  assert.throws(() => parseFamilyBackup(JSON.stringify({ ...family, drives: [{ ...drive, nightMinutes: 31 }] })));
+  assert.throws(() => parseFamilyBackup(JSON.stringify({ ...family, drives: [{ ...drive, routeUrl: "javascript:alert(1)" }] })));
+  assert.throws(() => parseFamilyBackup(JSON.stringify({ ...family, drives: [{ ...drive, practicedSkills: "Turns" }] })));
 });

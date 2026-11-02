@@ -44,3 +44,26 @@ export function routeMapUrl(route) {
   if (route.stops.length) params.set("waypoints", route.stops.join("|"));
   return `https://www.google.com/maps/dir/?${params}`;
 }
+
+// Backups include personal records. Validate before offering to replace local data.
+export function parseFamilyBackup(text) {
+  const data = JSON.parse(text);
+  const invalid = () => { throw new Error("This file is not a supported DriveReady backup."); };
+  const string = (value) => typeof value === "string";
+  const optionalString = (value) => value === undefined || string(value);
+  const stringList = (value) => value === undefined || (Array.isArray(value) && value.every(string));
+  if (!data || data.version !== 1 || !Array.isArray(data.learners) || !Array.isArray(data.drives)) invalid();
+  const learnerIds = new Set();
+  for (const learner of data.learners) {
+    if (!learner || !string(learner.id) || !learner.id || !string(learner.name) || !learner.name.trim() || learnerIds.has(learner.id)) invalid();
+    learnerIds.add(learner.id);
+  }
+  const driveIds = new Set();
+  for (const drive of data.drives) {
+    if (!drive || !string(drive.id) || !drive.id || driveIds.has(drive.id) || !learnerIds.has(drive.learnerId) || !string(drive.date) || !/^\d{4}-\d{2}-\d{2}$/.test(drive.date) || !Number.isInteger(drive.minutes) || drive.minutes < 1 || !Number.isInteger(drive.nightMinutes) || drive.nightMinutes < 0 || drive.nightMinutes > drive.minutes || !string(drive.skills) || !string(drive.notes) || !optionalString(drive.place) || !optionalString(drive.routeUrl) || (drive.routeUrl && !validRouteUrl(drive.routeUrl)) || !stringList(drive.practicedSkills) || !stringList(drive.practicedConditions)) invalid();
+    if (drive.route != null && (!string(drive.route.start) || !string(drive.route.end) || !Array.isArray(drive.route.stops) || !drive.route.stops.every(string))) invalid();
+    if (drive.location != null && (!Number.isFinite(drive.location.latitude) || Math.abs(drive.location.latitude) > 90 || !Number.isFinite(drive.location.longitude) || Math.abs(drive.location.longitude) > 180 || !Number.isFinite(drive.location.accuracy) || drive.location.accuracy < 0 || !string(drive.location.recordedAt) || !Number.isFinite(Date.parse(drive.location.recordedAt)))) invalid();
+    driveIds.add(drive.id);
+  }
+  return data;
+}

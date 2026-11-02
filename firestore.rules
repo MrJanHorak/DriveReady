@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Initial single-supervisor model. No public or cross-account access.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      match /learners/{learnerId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /drives/{driveId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}

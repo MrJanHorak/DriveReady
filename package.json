@@ -6,6 +6,7 @@
   "scripts": {
     "build": "vite build",
     "test": "node --test src/app/familyData.test.js",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-driveready \"node --test src/app/firestore.rules.test.js\"",
     "dev": "vite"
   },
   "dependencies": {
@@ -37,8 +38,8 @@
     "@radix-ui/react-slot": "1.1.2",
     "@radix-ui/react-switch": "1.1.3",
     "@radix-ui/react-tabs": "1.1.3",
-    "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-toggle": "1.1.2",
+    "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
     "canvas-confetti": "1.9.4",
     "class-variance-authority": "0.7.1",
@@ -46,6 +47,7 @@
     "cmdk": "1.1.1",
     "date-fns": "3.6.0",
     "embla-carousel-react": "8.6.0",
+    "firebase": "^11.10.0",
     "input-otp": "1.4.2",
     "lucide-react": "0.487.0",
     "motion": "12.23.24",
@@ -66,6 +68,7 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
     "@tailwindcss/vite": "4.1.12",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
