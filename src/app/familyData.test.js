@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { emptyFamily, formatMinutes, locationMapUrl, parseFamilyBackup, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validCalendarDate, validCloudRouteUrl, validRouteUrl } from "./familyData.js";
 import { validateCloudImport } from "./cloudFamily.js";
+import { downloadFamilyBackup, MAX_BACKUP_BYTES } from "./backupDownload.js";
 import { practiceCoverage, PRACTICE_SKILLS, unrecordedSkills } from "./practiceData.js";
 
 test("new browser starts with an empty family and saved data can be read back", () => {
@@ -109,4 +110,22 @@ test("cloud preflight identifies records without altering compatible local backu
   assert.throws(() => validateCloudImport({ ...family, learners: [{ id: "a", name: "x".repeat(61) }] }), /Learner 1: name/);
   assert.throws(() => validateCloudImport({ ...family, learners: [{ id: "😀".repeat(400), name: "Alex" }], drives: [] }), /record identifier/);
   assert.equal(parseFamilyBackup(JSON.stringify({ ...family, drives: [{ ...drive, routeUrl: "https://example.com:8443/" }] })).drives.length, 1);
+});
+
+test("oversized backups remain downloadable and report the restore limit", () => {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  let clicked = false;
+  let link;
+  globalThis.document = { createElement: () => (link = { click: () => { clicked = true; } }) };
+  globalThis.window = { setTimeout: (callback) => callback() };
+  try {
+    const bytes = downloadFamilyBackup({ notes: "x".repeat(MAX_BACKUP_BYTES) }, "backup.json");
+    assert.ok(bytes > MAX_BACKUP_BYTES);
+    assert.equal(clicked, true);
+    assert.equal(link.download, "backup.json");
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument;
+    if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow;
+  }
 });

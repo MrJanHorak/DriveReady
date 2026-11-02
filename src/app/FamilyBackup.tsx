@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { parseFamilyBackup } from "./familyData";
+import { downloadFamilyBackup, MAX_BACKUP_BYTES } from "./backupDownload";
 
 type Family = { version: number; learners: { id: string; name: string }[]; drives: { id: string }[] };
 const secondary = "rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted";
@@ -10,11 +11,11 @@ export default function FamilyBackup({ family, canExport, onRestore }: { family:
   const [reading, setReading] = useState(false);
   const request = useRef(0);
   function download() {
-    const blob = new Blob([JSON.stringify(family, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url; link.download = "driveready-backup.json"; link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    try {
+      const bytes = downloadFamilyBackup(family, "driveready-backup.json");
+      setMessage(bytes > MAX_BACKUP_BYTES ? "The backup exceeds 5 MB and cannot be restored with the current restore screen. Keep the file private." : "");
+    }
+    catch (failure) { setMessage(failure instanceof Error ? failure.message : "Could not prepare the backup."); }
   }
   async function selectFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -22,7 +23,7 @@ export default function FamilyBackup({ family, canExport, onRestore }: { family:
     const current = ++request.current;
     setCandidate(null); setMessage("");
     if (!file) { setReading(false); return; }
-    if (file.size > 5 * 1024 * 1024) { setReading(false); setMessage("The backup is too large. Choose a file smaller than 5 MB."); return; }
+    if (file.size > MAX_BACKUP_BYTES) { setReading(false); setMessage("The backup is too large. Choose a file no larger than 5 MB."); return; }
     setReading(true);
     try {
       const data = parseFamilyBackup(await file.text());
