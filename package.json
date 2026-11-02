@@ -8,6 +8,7 @@
     "test": "node --test src/app/familyData.test.js",
     "test:rules": "firebase emulators:exec --only firestore --project demo-driveready \"node --test src/app/firestore.rules.test.js\"",
     "test:firebase": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node --test src/app/firebase.integration.test.js\"",
+    "test:browser": "firebase emulators:exec --only auth,firestore --project demo-driveready \"playwright test\"",
     "dev": "vite"
   },
   "dependencies": {
@@ -70,6 +71,7 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "4.1.12",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
