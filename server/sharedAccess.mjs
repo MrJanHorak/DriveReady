@@ -22,10 +22,8 @@ function invitationId(token) {
   if (typeof token !== "string" || !tokenPattern.test(token)) throw unavailable();
   return createHash("sha256").update(token).digest("hex");
 }
-function recipientKey(email) { return createHash("sha256").update(email).digest("hex"); }
-function versionOf(snapshot) {
-  if (!snapshot.exists) return 0;
-  const version = snapshot.data().version;
+function invitationVersion(space) {
+  const version = space.invitationVersion;
   if (!Number.isSafeInteger(version) || version < 0 || version >= Number.MAX_SAFE_INTEGER) throw unauthorized();
   return version;
 }
@@ -55,7 +53,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     const member = space.collection("members").doc(caller.uid);
     const link = db.collection("users").doc(caller.uid).collection("spaceLinks").doc(space.id);
     await db.runTransaction(async (tx) => {
-      tx.create(space, { learnerName: learnerName.trim(), status: "active", managerUid: caller.uid, learnerUid: null, createdAt: FieldValue.serverTimestamp() });
+      tx.create(space, { learnerName: learnerName.trim(), status: "active", managerUid: caller.uid, learnerUid: null, invitationVersion: 0, createdAt: FieldValue.serverTimestamp() });
       tx.create(member, { role: "manager", active: true, joinedAt: FieldValue.serverTimestamp() });
       tx.create(link, { spaceId: space.id });
     });
@@ -69,16 +67,38 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     const { space, member } = refs(spaceId, caller.uid);
     const token = randomBytes(32).toString("base64url");
     const invite = space.collection("invitations").doc(invitationId(token));
-    const key = recipientKey(email);
-    const epoch = space.collection("invitationEpochs").doc(key);
     const expiresAt = now() + INVITATION_LIFETIME_MS;
     await db.runTransaction(async (tx) => {
-      const [spaceSnap, managerSnap, epochSnap] = await tx.getAll(space, member, epoch);
+      const [spaceSnap, managerSnap] = await tx.getAll(space, member);
       if (!isManager(spaceSnap, managerSnap) || spaceSnap.data().managerUid !== caller.uid) throw unauthorized();
-      tx.create(invite, { recipientEmail: email, recipientKey: key, invitationVersion: versionOf(epochSnap), role, managerUid: caller.uid, status: "pending", expiresAt, createdAt: FieldValue.serverTimestamp() });
+      tx.create(invite, { recipientEmail: email, invitationVersion: invitationVersion(spaceSnap.data()), role, managerUid: caller.uid, status: "pending", expiresAt, createdAt: FieldValue.serverTimestamp() });
     });
     // The token is a secret. Delivery is intentionally not implemented.
     return { spaceId: space.id, token, expiresAt };
+  }
+
+  async function validInvitation(tx, space, member, invite, caller) {
+    const [spaceSnap, inviteSnap, memberSnap] = await tx.getAll(space, invite, member);
+    if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !inviteSnap.exists) throw unavailable();
+    const item = inviteSnap.data();
+    if (item.status !== "pending" || item.recipientEmail !== caller.email || !Number.isSafeInteger(item.invitationVersion) || !["supervisor", "learner"].includes(item.role) || !Number.isSafeInteger(item.expiresAt) || now() >= item.expiresAt || !idPattern.test(item.managerUid)) throw unavailable();
+    const manager = await tx.get(space.collection("members").doc(item.managerUid));
+    if (!isManager(spaceSnap, manager) || spaceSnap.data().managerUid !== item.managerUid || (memberSnap.exists && memberSnap.data().active === true)) throw unavailable();
+    if (invitationVersion(spaceSnap.data()) !== item.invitationVersion) throw unavailable();
+    // A learner slot cannot be transferred to a different account by re-inviting.
+    if (item.role === "learner" && spaceSnap.data().learnerUid != null && spaceSnap.data().learnerUid !== caller.uid) throw unavailable();
+    if (item.role === "supervisor" && spaceSnap.data().learnerUid === caller.uid) throw unavailable();
+    return { spaceSnap, item };
+  }
+
+  async function previewInvitation({ idToken, spaceId, token }) {
+    const caller = await identity(idToken);
+    const { space, member } = refs(spaceId, caller.uid);
+    const invite = space.collection("invitations").doc(invitationId(token));
+    return db.runTransaction(async (tx) => {
+      const { spaceSnap, item } = await validInvitation(tx, space, member, invite, caller);
+      return { learnerName: spaceSnap.data().learnerName, role: item.role, expiresAt: item.expiresAt };
+    });
   }
 
   async function acceptInvitation({ idToken, spaceId, token }) {
@@ -86,18 +106,8 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     const { space, member } = refs(spaceId, caller.uid);
     const invite = space.collection("invitations").doc(invitationId(token));
     await db.runTransaction(async (tx) => {
-      const [spaceSnap, inviteSnap, memberSnap] = await tx.getAll(space, invite, member);
-      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !inviteSnap.exists) throw unavailable();
-      const item = inviteSnap.data();
-      if (item.status !== "pending" || item.recipientEmail !== caller.email || item.recipientKey !== recipientKey(caller.email) || !Number.isSafeInteger(item.invitationVersion) || !["supervisor", "learner"].includes(item.role) || !Number.isSafeInteger(item.expiresAt) || now() >= item.expiresAt || !idPattern.test(item.managerUid)) throw unavailable();
-      const [manager, epoch] = await tx.getAll(space.collection("members").doc(item.managerUid), space.collection("invitationEpochs").doc(item.recipientKey));
-      if (!isManager(spaceSnap, manager) || spaceSnap.data().managerUid !== item.managerUid || (memberSnap.exists && memberSnap.data().active === true)) throw unavailable();
-      if (versionOf(epoch) !== item.invitationVersion) throw unavailable();
-      // A learner slot cannot be transferred to a different account by re-inviting.
-      if (item.role === "learner" && spaceSnap.data().learnerUid != null && spaceSnap.data().learnerUid !== caller.uid) throw unavailable();
-      if (item.role === "supervisor" && spaceSnap.data().learnerUid === caller.uid) throw unavailable();
+      const { item } = await validInvitation(tx, space, member, invite, caller);
       tx.set(member, { role: item.role, active: true, joinedAt: FieldValue.serverTimestamp() });
-      tx.set(space.collection("membershipPrivate").doc(caller.uid), { recipientKey: item.recipientKey });
       tx.set(db.collection("users").doc(caller.uid).collection("spaceLinks").doc(space.id), { spaceId: space.id });
       if (item.role === "learner") tx.update(space, { learnerUid: caller.uid });
       tx.update(invite, { status: "accepted", acceptedByUid: caller.uid, acceptedAt: FieldValue.serverTimestamp() });
@@ -124,18 +134,15 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     const target = space.collection("members").doc(targetUid);
     const link = db.collection("users").doc(targetUid).collection("spaceLinks").doc(space.id);
     await db.runTransaction(async (tx) => {
-      const metadata = space.collection("membershipPrivate").doc(targetUid);
-      const [spaceSnap, managerSnap, targetSnap, metadataSnap] = await tx.getAll(space, member, target, metadata);
+      const [spaceSnap, managerSnap, targetSnap] = await tx.getAll(space, member, target);
       if (!isManager(spaceSnap, managerSnap) || spaceSnap.data().managerUid !== caller.uid) throw unauthorized();
       if (!targetSnap.exists || targetSnap.data().active !== true || targetSnap.data().role === "manager") throw unauthorized();
-      const key = metadataSnap.exists ? metadataSnap.data().recipientKey : null;
-      if (typeof key !== "string" || !/^[a-f0-9]{64}$/.test(key)) throw new Error("Member access could not be removed; contact support.");
-      const epoch = space.collection("invitationEpochs").doc(key);
-      const epochSnap = await tx.get(epoch);
-      tx.set(epoch, { version: versionOf(epochSnap) + 1 });
+      // Invalidate all pending invitations in this space. An account can change
+      // its email, so filtering only by the old invite address is unsafe.
+      tx.update(space, { invitationVersion: invitationVersion(spaceSnap.data()) + 1 });
       tx.update(target, { active: false, removedAt: FieldValue.serverTimestamp() });
       tx.delete(link);
     });
   }
-  return { createSpace, createInvitation, acceptInvitation, cancelInvitation, removeMember };
+  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, removeMember };
 }
