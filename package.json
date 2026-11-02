@@ -8,7 +8,8 @@
     "test": "node --test src/app/familyData.test.js",
     "test:rules": "firebase emulators:exec --only firestore --project demo-driveready \"node --test src/app/firestore.rules.test.js\"",
     "test:firebase": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node --test src/app/firebase.integration.test.js\"",
-    "test:shared": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node --test server/sharedAccess.test.mjs\"",
+    "test:shared": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node --test server/sharedAccess.test.mjs server/localSharedGateway.test.mjs\"",
+    "test:shared:browser": "firebase emulators:exec --only auth,firestore --project demo-driveready \"playwright test --config playwright.shared.config.js\"",
     "test:browser": "firebase emulators:exec --only auth,firestore --project demo-driveready \"playwright test\"",
     "test:live:dev": "playwright test --config playwright.live.config.js",
     "dev": "vite"
