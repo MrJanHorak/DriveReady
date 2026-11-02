@@ -125,3 +125,18 @@ test("a pending cloud save blocks sign-out and a rejected save keeps the form", 
   await page.getByRole("button", { name: "Save drive" }).click();
   await expect(page.getByText("30m", { exact: false }).first()).toBeVisible();
 });
+
+test("an incompatible local record identifies the field before any copy", async ({ page }) => {
+  const family = { version: 1, learners: [{ id: "a", name: "Alex" }], drives: [{ id: "d", learnerId: "a", date: "2026-11-01", minutes: 30, nightMinutes: 0, skills: "", notes: "", routeUrl: "https://example.com:8443/" }] };
+  await page.addInitScript((data) => localStorage.setItem("driveready.family.v1", JSON.stringify(data)), family);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Create an account" }).click();
+  await page.getByLabel("Email", { exact: true }).fill(`invalid-${Date.now()}@example.test`);
+  await page.getByLabel("Password", { exact: true }).fill("test-password-123");
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
+  await page.getByRole("button", { name: "Review local records to copy" }).click();
+  await expect(page.getByText(/Drive 1: route link must use HTTPS/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy to account" })).toHaveCount(0);
+  await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
+});

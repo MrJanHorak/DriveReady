@@ -31,6 +31,17 @@ export function validRouteUrl(value) {
   catch { return false; }
 }
 
+// Cloud links use a restricted hostname format that can also be checked by Firestore rules.
+export function validCloudRouteUrl(value) {
+  return value === "" || (value.length <= 2048 && /^https:\/\/([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,63}([/?#][^\s]*)?$/.test(value) && validRouteUrl(value));
+}
+
+export function validCalendarDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 export function locationMapUrl(location) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${location.latitude},${location.longitude}`)}`;
 }

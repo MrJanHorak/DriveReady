@@ -9,6 +9,17 @@ service cloud.firestore {
         stringAt(value, 0) && stringAt(value, 1) && stringAt(value, 2) && stringAt(value, 3) &&
         stringAt(value, 4) && stringAt(value, 5) && stringAt(value, 6) && stringAt(value, 7);
     }
+    function validDate(value) {
+      let parts = value.split('-');
+      let y = int(parts[0]);
+      let m = int(parts[1]);
+      let d = int(parts[2]);
+      let date = timestamp.date(y, m, d);
+      return y >= 1 && date.year() == y && date.month() == m && date.day() == d;
+    }
+    function dateString(value) {
+      return value is string && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') && validDate(value);
+    }
     function learner(data, id) {
       return data.keys().hasOnly(['id', 'name']) && data.keys().hasAll(['id', 'name']) &&
         data.id == id && text(data.name, 60) && data.name.matches('.*\\S.*');
@@ -23,18 +34,19 @@ service cloud.firestore {
         value.keys().hasAll(['latitude', 'longitude', 'accuracy', 'recordedAt']) &&
         value.latitude is number && value.latitude >= -90 && value.latitude <= 90 &&
         value.longitude is number && value.longitude >= -180 && value.longitude <= 180 &&
-        value.accuracy is number && value.accuracy >= 0 && text(value.recordedAt, 40) &&
-        value.recordedAt.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$'));
+        value.accuracy is number && value.accuracy >= 0 && value.accuracy <= 100000000 && text(value.recordedAt, 40) &&
+        value.recordedAt.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$') &&
+        dateString(value.recordedAt.split('T')[0]));
     }
     function drive(data, id) {
       return data.keys().hasOnly(['id', 'learnerId', 'date', 'minutes', 'nightMinutes', 'skills', 'notes', 'place', 'routeUrl', 'route', 'location', 'practicedSkills', 'practicedConditions']) &&
         data.keys().hasAll(['id', 'learnerId', 'date', 'minutes', 'nightMinutes', 'skills', 'notes']) &&
         data.id == id && data.learnerId is string && data.learnerId.size() > 0 &&
-        data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
-        data.minutes is int && data.minutes >= 1 && data.nightMinutes is int && data.nightMinutes >= 0 && data.nightMinutes <= data.minutes &&
+        dateString(data.date) &&
+        data.minutes is int && data.minutes >= 1 && data.minutes <= 9007199254740991 && data.nightMinutes is int && data.nightMinutes >= 0 && data.nightMinutes <= data.minutes &&
         text(data.skills, 200) && text(data.notes, 1000) &&
         (!('place' in data) || text(data.place, 200)) &&
-        (!('routeUrl' in data) || (text(data.routeUrl, 2048) && (data.routeUrl == '' || data.routeUrl.matches('^https://[^ /]+.*$')))) &&
+        (!('routeUrl' in data) || (text(data.routeUrl, 2048) && (data.routeUrl == '' || data.routeUrl.matches('^https://([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}([/?#][^\\s]*)?$')))) &&
         (!('route' in data) || route(data.route)) && (!('location' in data) || location(data.location)) &&
         (!('practicedSkills' in data) || stringList(data.practicedSkills, 8)) &&
         (!('practicedConditions' in data) || stringList(data.practicedConditions, 8));

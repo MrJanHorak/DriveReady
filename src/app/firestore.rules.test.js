@@ -60,11 +60,16 @@ test("rules reject malformed records, orphaned drives, moves and deletes", async
   await assertSucceeds(setDoc(driveRef, { ...drive, route: { start: "A", end: "B", stops: ["C"] }, location: { latitude: 33, longitude: -82, accuracy: 10, recordedAt: "2026-11-01T12:00:00.000Z" }, practicedSkills: ["Turns"], routeUrl: "https://example.com" }));
   for (const invalid of [
     { ...drive, nightMinutes: 31 }, { ...drive, minutes: 1.5 }, { ...drive, date: "bad" },
+    { ...drive, date: "2025-02-29" }, { ...drive, date: "2026-13-01" },
     { ...drive, routeUrl: "javascript:alert(1)" }, { ...drive, practicedSkills: [1] },
+    { ...drive, routeUrl: "https://%" }, { ...drive, routeUrl: "https://example.com:99999/" },
     { ...drive, route: { start: "A", end: "B", stops: ["1", "2", "3", "4"] } },
     { ...drive, location: { latitude: 91, longitude: 0, accuracy: 0, recordedAt: "2026-11-01T12:00:00.000Z" } },
+    { ...drive, location: { latitude: 0, longitude: 0, accuracy: 0, recordedAt: "2026-99-01T99:00:00.000Z" } },
+    { ...drive, location: { latitude: 0, longitude: 0, accuracy: Infinity, recordedAt: "2026-11-01T12:00:00.000Z" } },
     { ...drive, unexpected: true }, { ...drive, learnerId: "other" },
   ]) await assertFails(setDoc(driveRef, invalid));
+  await assertSucceeds(setDoc(driveRef, { ...drive, date: "2024-02-29", routeUrl: "https://maps.example.com?query=Augusta" }));
   await assertFails(deleteDoc(learnerRef));
   await assertFails(deleteDoc(driveRef));
 });

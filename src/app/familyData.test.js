@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { emptyFamily, formatMinutes, locationMapUrl, parseFamilyBackup, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validRouteUrl } from "./familyData.js";
+import { emptyFamily, formatMinutes, locationMapUrl, parseFamilyBackup, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validCalendarDate, validCloudRouteUrl, validRouteUrl } from "./familyData.js";
+import { validateCloudImport } from "./cloudFamily.js";
 import { practiceCoverage, PRACTICE_SKILLS, unrecordedSkills } from "./practiceData.js";
 
 test("new browser starts with an empty family and saved data can be read back", () => {
@@ -92,4 +93,20 @@ test("backups preserve old and new drive fields and reject incompatible or corru
   assert.throws(() => parseFamilyBackup(JSON.stringify({ ...family, drives: [{ ...drive, nightMinutes: 31 }] })));
   assert.throws(() => parseFamilyBackup(JSON.stringify({ ...family, drives: [{ ...drive, routeUrl: "javascript:alert(1)" }] })));
   assert.throws(() => parseFamilyBackup(JSON.stringify({ ...family, drives: [{ ...drive, practicedSkills: "Turns" }] })));
+});
+
+test("cloud preflight identifies records without altering compatible local backups", () => {
+  const drive = { id: "d", learnerId: "a", date: "2024-02-29", minutes: 30, nightMinutes: 0, skills: "", notes: "", routeUrl: "https://maps.example.com?query=Augusta" };
+  const family = { version: 1, learners: [{ id: "a", name: "Alex" }], drives: [drive] };
+  assert.deepEqual(validateCloudImport(family), family);
+  assert.equal(validCalendarDate("2024-02-29"), true);
+  assert.equal(validCalendarDate("2025-02-29"), false);
+  assert.equal(validCalendarDate("2026-13-01"), false);
+  assert.equal(validCloudRouteUrl("https://%"), false);
+  assert.equal(validCloudRouteUrl("https://example.com:8443/"), false);
+  assert.throws(() => validateCloudImport({ ...family, drives: [{ ...drive, date: "2025-02-29" }] }), /Drive 1: date or duration/);
+  assert.throws(() => validateCloudImport({ ...family, drives: [{ ...drive, routeUrl: "https://example.com:8443/" }] }), /Drive 1: route link/);
+  assert.throws(() => validateCloudImport({ ...family, learners: [{ id: "a", name: "x".repeat(61) }] }), /Learner 1: name/);
+  assert.throws(() => validateCloudImport({ ...family, learners: [{ id: "😀".repeat(400), name: "Alex" }], drives: [] }), /record identifier/);
+  assert.equal(parseFamilyBackup(JSON.stringify({ ...family, drives: [{ ...drive, routeUrl: "https://example.com:8443/" }] })).drives.length, 1);
 });

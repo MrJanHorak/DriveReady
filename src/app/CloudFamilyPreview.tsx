@@ -25,7 +25,10 @@ export default function CloudFamily({ uid, onBusyChange, disabled = false }: { u
       // Apply the same validation as a backup, without deleting or changing it.
       setLocal(validateCloudImport(readFamily(window.localStorage)));
       setStatus("");
-    } catch { setStatus("Local records could not be read or contain fields outside cloud storage limits. Nothing was imported."); setLocal(null); }
+    } catch (failure) {
+      const message = failure instanceof Error && failure.message.includes("cloud storage limits") ? failure.message : "Local records are invalid or could not be read. Nothing was copied.";
+      setStatus(message); setLocal(null);
+    }
   }
   async function doImport() {
     if (!db || !local || busy || disabled) return;

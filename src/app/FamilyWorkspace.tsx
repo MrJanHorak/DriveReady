@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { emptyFamily, formatMinutes, locationMapUrl, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validRouteUrl } from "./familyData";
+import { emptyFamily, formatMinutes, locationMapUrl, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validCalendarDate, validCloudRouteUrl, validRouteUrl } from "./familyData";
 import PracticeCoverage, { PracticeChoices } from "./PracticeCoverage";
 import GettingStarted from "./GettingStarted";
 import FamilyBackup from "./FamilyBackup";
@@ -139,10 +139,11 @@ export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingCha
   async function saveDrive(event: React.FormEvent) {
     event.preventDefault();
     const total = Number(minutes), night = Number(nightMinutes);
-    if (!selectedId || !date || !Number.isInteger(total) || total < 1 || !Number.isInteger(night) || night < 0 || night > total) {
+    if (!selectedId || !validCalendarDate(date) || !Number.isSafeInteger(total) || total < 1 || !Number.isSafeInteger(night) || night < 0 || night > total) {
       setFormError("Enter a date, a whole-number duration of at least one minute, and night minutes no greater than the total."); return;
     }
     if (!validRouteUrl(routeUrl)) { setFormError("Enter a complete HTTPS route link, or leave it blank."); return; }
+    if (cloudUid && !validCloudRouteUrl(routeUrl.trim())) { setFormError("For cloud records, use an HTTPS link with a standard domain name and no custom port, or leave it blank."); return; }
     const start = routeStart.trim(), end = routeEnd.trim();
     const stops = routeStops.split("\n").map((stop) => stop.trim()).filter(Boolean);
     if ((start || end || stops.length) && (!start || !end)) { setFormError("Enter both a start and destination for the route, or clear the route fields."); return; }

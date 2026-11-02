@@ -1,5 +1,5 @@
 import { collection, doc, getDocsFromServer, runTransaction } from "firebase/firestore";
-import { parseFamilyBackup } from "./familyData.js";
+import { parseFamilyBackup, validCalendarDate, validCloudRouteUrl } from "./familyData.js";
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -14,17 +14,22 @@ export function validateCloudImport(family) {
   const keys = (value, allowed) => Object.keys(value).every((key) => allowed.includes(key));
   const text = (value, max) => typeof value === "string" && value.length <= max;
   const list = (value, max) => Array.isArray(value) && value.length <= max && value.every((item) => text(item, 200));
-  const id = (value) => text(value, 1500) && value.length > 0 && !value.includes("/");
-  const invalid = () => { throw new Error("Some local records do not fit cloud storage limits. No records were copied."); };
-  for (const learner of parsed.learners) {
-    if (!keys(learner, ["id", "name"]) || !id(learner.id) || !text(learner.name, 60) || !learner.name.trim()) invalid();
+  const id = (value) => typeof value === "string" && value.length > 0 && new TextEncoder().encode(value).length <= 1500 && !value.includes("/") && value !== "." && value !== ".." && !/^__.*__$/.test(value);
+  const invalid = (record, reason) => { throw new Error(`${record}: ${reason} (cloud storage limits). No records were copied.`); };
+  for (const [index, learner] of parsed.learners.entries()) {
+    const label = `Learner ${index + 1}`;
+    if (!keys(learner, ["id", "name"]) || !id(learner.id)) invalid(label, "unsupported record identifier or extra fields");
+    if (!text(learner.name, 60) || !learner.name.trim() || /[\r\n\u2028\u2029]/.test(learner.name)) invalid(label, "name must be 1–60 characters on one line");
   }
-  for (const drive of parsed.drives) {
-    if (!keys(drive, ["id", "learnerId", "date", "minutes", "nightMinutes", "skills", "notes", "place", "routeUrl", "route", "location", "practicedSkills", "practicedConditions"]) || !id(drive.id) || !id(drive.learnerId) || !text(drive.skills, 200) || !text(drive.notes, 1000) ||
-        (drive.place !== undefined && !text(drive.place, 200)) || (drive.routeUrl !== undefined && (!text(drive.routeUrl, 2048) || (drive.routeUrl !== "" && !/^https:\/\/[^ /]+/.test(drive.routeUrl)))) ||
-        (drive.practicedSkills !== undefined && !list(drive.practicedSkills, 8)) || (drive.practicedConditions !== undefined && !list(drive.practicedConditions, 8))) invalid();
-    if (drive.route != null && (!keys(drive.route, ["start", "end", "stops"]) || !text(drive.route.start, 200) || !text(drive.route.end, 200) || !list(drive.route.stops, 3))) invalid();
-    if (drive.location != null && (!keys(drive.location, ["latitude", "longitude", "accuracy", "recordedAt"]) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(drive.location.recordedAt))) invalid();
+  for (const [index, drive] of parsed.drives.entries()) {
+    const label = `Drive ${index + 1}`;
+    if (!keys(drive, ["id", "learnerId", "date", "minutes", "nightMinutes", "skills", "notes", "place", "routeUrl", "route", "location", "practicedSkills", "practicedConditions"]) || !id(drive.id) || !id(drive.learnerId)) invalid(label, "unsupported record identifier or extra fields");
+    if (!validCalendarDate(drive.date) || !Number.isSafeInteger(drive.minutes) || !Number.isSafeInteger(drive.nightMinutes)) invalid(label, "date or duration is invalid");
+    if (!text(drive.skills, 200) || !text(drive.notes, 1000) || (drive.place !== undefined && !text(drive.place, 200))) invalid(label, "skills, notes or place is too long");
+    if (drive.routeUrl !== undefined && !validCloudRouteUrl(drive.routeUrl)) invalid(label, "route link must use HTTPS and a standard domain without a custom port");
+    if ((drive.practicedSkills !== undefined && !list(drive.practicedSkills, 8)) || (drive.practicedConditions !== undefined && !list(drive.practicedConditions, 8))) invalid(label, "practice tags exceed the allowed size");
+    if (drive.route != null && (!keys(drive.route, ["start", "end", "stops"]) || !text(drive.route.start, 200) || !text(drive.route.end, 200) || !list(drive.route.stops, 3))) invalid(label, "route fields exceed the allowed size");
+    if (drive.location != null && (!keys(drive.location, ["latitude", "longitude", "accuracy", "recordedAt"]) || drive.location.accuracy > 100000000 || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(drive.location.recordedAt) || new Date(drive.location.recordedAt).toISOString() !== drive.location.recordedAt)) invalid(label, "location accuracy or timestamp is invalid");
   }
   return parsed;
 }
