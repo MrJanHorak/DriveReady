@@ -1,0 +1,73 @@
+import { collection, doc, getDocs, runTransaction } from "firebase/firestore";
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+  return value;
+}
+const sameRecord = (left, right) => JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+
+function records(db, uid, kind) {
+  return collection(db, "users", uid, kind);
+}
+
+// A separate document for each record avoids overwriting unrelated family data.
+export async function readCloudFamily(db, uid) {
+  const [learners, drives] = await Promise.all([
+    getDocs(records(db, uid, "learners")), getDocs(records(db, uid, "drives")),
+  ]);
+  return { version: 1, learners: learners.docs.map((item) => item.data()), drives: drives.docs.map((item) => item.data()) };
+}
+
+// Creates never overwrite records, including when a local import is retried.
+export async function createCloudRecord(db, uid, kind, record) {
+  if (!['learners', 'drives'].includes(kind) || !record.id || record.id.includes('/')) throw new Error("Invalid record identifier.");
+  const ref = doc(records(db, uid, kind), record.id);
+  return runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists()) throw new Error("A record with this identifier already exists.");
+    if (kind === "drives") {
+      const learner = await transaction.get(doc(records(db, uid, "learners"), record.learnerId));
+      if (!learner.exists()) throw new Error("The learner does not exist in this account.");
+    }
+    transaction.set(ref, record);
+  });
+}
+
+// On updates, compare against the version the user loaded before editing.
+export async function replaceCloudRecord(db, uid, kind, original, replacement) {
+  if (!['learners', 'drives'].includes(kind) || !original.id || original.id !== replacement.id || original.id.includes('/')) throw new Error("Invalid record identifier.");
+  const ref = doc(records(db, uid, kind), original.id);
+  return runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (!existing.exists() || !sameRecord(existing.data(), original)) throw new Error("This record changed on another device. Refresh before editing it again.");
+    if (kind === "drives" && replacement.learnerId !== original.learnerId) throw new Error("A drive cannot be moved to another learner.");
+    transaction.set(ref, replacement);
+  });
+}
+
+// Import never overwrites cloud records. Partial runs can be retried safely;
+// collisions are reported for review rather than silently merged.
+export async function importCloudFamily(db, uid, family) {
+  const result = { created: 0, existing: 0, conflicts: 0 };
+  const conflictedLearners = new Set();
+  for (const [kind, entries] of [["learners", family.learners], ["drives", family.drives]]) {
+    for (const record of entries) {
+      if (kind === "drives" && conflictedLearners.has(record.learnerId)) { result.conflicts += 1; continue; }
+      const ref = doc(records(db, uid, kind), record.id);
+      const outcome = await runTransaction(db, async (transaction) => {
+        const existing = await transaction.get(ref);
+        if (existing.exists()) return sameRecord(existing.data(), record) ? "existing" : "conflicts";
+        if (kind === "drives") {
+          const learner = await transaction.get(doc(records(db, uid, "learners"), record.learnerId));
+          if (!learner.exists()) return "conflicts";
+        }
+        transaction.set(ref, record);
+        return "created";
+      });
+      result[outcome] += 1;
+      if (kind === "learners" && outcome === "conflicts") conflictedLearners.add(record.id);
+    }
+  }
+  return result;
+}
