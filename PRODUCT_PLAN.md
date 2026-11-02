@@ -1,6 +1,6 @@
 # DriveReady product plan
 
-Working plan, November 1, 2026. This captures the product vision and a proposed sequence; it is not a fixed specification. The selected first pilot is the Augusta, Georgia area.
+Working plan, updated November 2, 2026. This captures the product vision and the user's current direction; details still marked as decisions are not a fixed specification. The selected first pilot is the Augusta, Georgia area.
 
 ## Vision
 
@@ -10,12 +10,12 @@ The product is a toolkit, not a required lesson-by-lesson curriculum. A welcomin
 
 ## Core journey
 
-1. A supervisor creates a family space and a learner profile.
-2. “Where to start” suggests a few appropriate skills, tips, and next actions based on the learner's experience and location.
-3. The family selects a skill and finds or plans a suitable practice route.
-4. After the drive, the supervisor records its duration, skills, conditions, and reflections, including the learner's input if they wish.
-5. The family reviews hours and the breadth of practice, then chooses what to try or repeat next.
-6. Supervisors contribute routes and practical tips that help other families, subject to product safeguards.
+1. A managing supervisor creates a learner's practice space and can invite specific trusted adults; relationships may include parents, guardians, relatives, or other supervisors.
+2. The learner can sign in to view routes, progress, and shared notes. The managing supervisor controls invitations; detailed permissions are still to be decided.
+3. The learner and supervisor find an existing shared route or plan a route of their own, using skills and location to help choose.
+4. After the drive, a supervisor records its duration, route, skills, conditions, notes, and the supervisor who was present. Identity of the supervisor present is reported by the user, not independently verified.
+5. The learner and supervisors review practice and decide what to try or repeat next. Later, the learner can also receive feedback and access theory lessons.
+6. Community members can submit routes, vote them up or down, and report routes for review with a reason. Route-use counts can show how often routes were logged, not whether they are safe.
 
 ## Product principles
 
@@ -28,40 +28,40 @@ The product is a toolkit, not a required lesson-by-lesson curriculum. A welcomin
 
 ## Phase 1: A useful family toolkit on the web
 
-**Outcome:** A supervisor can set up a learner, find a practice idea, record a real drive, and return later to see accurate progress.
+**Outcome:** A supervisor and learner can return to a shared practice space, discover or create a route, log a drive, and review their saved practice.
 
 Proposed capabilities:
 
-- Supervisor-managed family and learner profiles, with persistent data.
+- Supervisor-managed learner spaces, learner sign-in, and invitations for specific trusted adults. Avoid assuming all supervisors have the same family relationship. Decide exactly who can invite, view, record, edit, or remove information before implementing permissions.
 - An optional “Where to start” flow, with suggestions tailored to experience and location and a clear way to explore independently.
 - A flexible catalog of skills, driving environments, conditions, and short learning tips.
-- Manual drive logs containing date, duration, day/night, skills and conditions practiced, optional route, and notes. Support editing and correcting entries.
+- Manual drive logs containing date, duration, day/night, skills and conditions practiced, route information, notes, and the supervisor reported as present. Support editing and correcting entries. Define how route-use counts respond to edits and repeated logs.
 - A progress view calculated from logs, showing total and night hours as well as skills and conditions practiced. It should distinguish exposure from proficiency and make repetition possible.
-- Location-aware route discovery: use a location the family provides, or their device location with permission, to show nearby routes first. Let them adjust the area or search elsewhere and clearly show the route's location and approximate distance. When nearby results are scarce, explain that and offer a wider search rather than silently presenting distant routes as local. Combine proximity with skill, difficulty, and other filters. Supervisors can create and share routes; decide how routes are reviewed before enabling public contributions.
+- Route discovery and creation are central to the pilot. Start in the Augusta area, potentially with seeded routes, and allow community submissions. Use a location the user provides, or device location with permission, to find nearby routes; allow a wider search and useful filters. Provide up/down voting and reporting with reasons. Define moderation, abuse controls, reporting response, and whether and when to temporarily hide reported routes before public contributions go live.
 - The current drive-log route description and external map preview are an interim solution. Revisit route creation with an interactive map and a way to choose and save actual locations and paths; the current experience has not yet met the desired vision.
-- An initial learning-tip collection, with a clear distinction between product-provided and community-contributed advice. Start with a manageable contribution and review process.
+- Basic guidance can support the pilot; broader feedback, theory lessons, and any community-contributed advice are later work. Distinguish product-provided material from community contributions and decide how each is reviewed.
 - State information only where sourced and reviewed, with source links and review dates. Show clearly when a state or requirement is not yet covered; do not infer compliance from incomplete information.
-- Responsive, accessible web experience and clear privacy and data controls appropriate to the chosen account model.
+- Mobile-first, responsive and accessible web experience: planning should also work on a computer. Test phone use before assuming a native app, offline navigation, or automatic trip recording is needed. Make privacy and access controls clear.
 
-**First milestone:** Implement the smallest complete vertical slice—create a learner, record and edit a drive, and see progress calculated from saved data. Add route and tip discovery to that foundation, then enable contributions when the trust and moderation approach is ready. Details, order, and scope should be confirmed before development.
+**First milestone:** Build a complete vertical slice for a supervisor-managed learner space: find or create a real saved route, record a drive against it, and let the learner review the route and notes. Extend the existing single-supervisor storage model to support authorized members before enabling shared access. Add public submissions and community feedback with moderation safeguards before presenting them as working features.
 
-**Phase 1 is successful when:** A family can complete the core journey with real saved data, retrieve it in a later session, and understand which routes, tips, and requirements are community-contributed or verified. No progress, publication, or compliance claim should be simulated as real.
+**Phase 1 is successful when:** A learner and their authorized supervisors can retrieve a shared practice space, use a saved route, and review a logged drive and its notes. Route contributions and feedback must be real if shown as available. Community routes and popularity must not be presented as verified or as a safety guarantee.
 
 ## Phase 2: Learner participation and learning
 
 **Outcome:** A learner can prepare, reflect, and take ownership of progress alongside their supervisor.
 
-- Offer optional invited learner access to their own progress and planned activities.
+- Expand the learner's initial access to support more independent preparation and participation, subject to agreed permissions.
 - Provide short, approachable tips and optional learning activities tied to practical skills; explore community-contributed tips with review and attribution.
 - Allow learner and supervisor reflections, with visibility and sharing rules decided before implementation.
-- Keep route creation and public publishing limited to authorized supervisors; define how learner suggestions, if any, reach a supervisor.
+- Decide whether learner accounts can suggest or submit routes and how supervisors participate in those actions.
 - Design invitations, permissions, family changes, and privacy controls around the needs of minors and their families.
 
 ## Phase 3: Phone-assisted drives
 
-**Outcome:** Make it easier to capture a practice session without distracting the learner.
+**Outcome:** Make it easier to capture a practice session without distracting the learner, building on the initial mobile-friendly website.
 
-- Introduce a mobile experience using the same family, learner, route, and log data as the web app.
+- Evaluate whether a native mobile app adds enough value beyond the initial mobile web experience.
 - Explore a drive timer and optional GPS recording, with explicit controls for consent, access, retention, and deletion. A supervisor or passenger should operate the app.
 - Evaluate navigation through Google Maps, Apple Maps, or an integrated map. Test whether a practice route's required roads and waypoints survive handoff or recalculation before selecting an approach.
 - Research and test whether speed or sudden-braking observations are reliable and useful. Present any supported observations as context for reflection, not automatic mistakes or a safety score; a rapid slowdown may be appropriate.
@@ -75,16 +75,14 @@ Community routes and tips need reporting, moderation, and a way to flag outdated
 
 ## Decisions to make next
 
-1. **Pilot:** Augusta, Georgia is the selected initial area; define the scope and participants for validation.
-2. **Audience:** Are parents and guardians the only initial supervisors, or should other trusted adults and instructors be supported from the start?
-3. **Accounts and privacy:** What family access, invitation, data deletion, and sharing controls are needed for the first release?
-4. **Routes:** How should supervisors create routes initially, and should a new route be private by default, shared with a family, or eligible for public review?
-5. **Learning tips:** Who can submit them, who reviews them, and how should sources, author attribution, and updates work?
-6. **Progress:** Which skills and conditions matter most initially, and what constitutes a useful record without implying a formal competency assessment?
-7. **Learner reflections:** In phase 2, should they be shared with the supervisor automatically, private, or individually shareable?
-8. **Launch:** Is the near-term target a personal family prototype, a small invited pilot, or a public service?
-9. **Local discovery:** What default search radius feels useful, particularly in rural areas, and should it vary with the number of nearby routes? How precise a starting location can be shown publicly without exposing a family's home or routine?
+1. **Accounts and access:** How are learner accounts created and connected, and what can learners, the managing supervisor, and invited supervisors view or change? How are invitations, lost access, removal, and changing the managing supervisor handled?
+2. **Routes:** What route editing and mapping experience is needed first? Are new routes private, shared with the learner's space, or public by default? Can learners submit or vote?
+3. **Moderation:** Who reviews reports, what reasons are available, and when should a reported route be temporarily hidden? How are voting abuse, appeals, and outdated routes handled?
+4. **Route-use counts:** What qualifies as a logged use, how should edits or deleted logs affect the count, and what should be shown publicly without identifying a learner or revealing a trip?
+5. **Learning and notes:** Which notes are visible to the learner and invited supervisors, and what feedback and theory content should follow the initial release? Who authors and reviews learning content?
+6. **Privacy and operations:** How will data deletion, retention, access to accounts belonging to minors, backups, recovery, and support work before real family data is used?
+7. **Launch and geography:** Anyone may sign up; define the practical rollout and initial Augusta seed coverage. Decide location precision and discovery radius without exposing homes or routines.
 
 ## Engineering starting point
 
-The current Figma-derived web interface is a prototype with sample data. Firebase Authentication and Cloud Firestore are the selected direction for accounts and shared persistence; the initial work will be local before creating a cloud project. See [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for the implementation and security plan, [PROJECT_STATUS.md](PROJECT_STATUS.md) for current gaps, and [README.md](README.md) for local setup. Preserve the existing prototype as a design reference while replacing simulated actions with real behavior.
+The current Figma-derived web interface is a prototype with sample routes. A Firebase development project supports an early single-supervisor cloud workspace, but learner sign-in, invitations, shared practice spaces, persistent routes, community voting, and reporting are not implemented. Do not infer that these features are ready from the plan. See [FIREBASE_SETUP.md](FIREBASE_SETUP.md) and [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for current implementation and security work; [PROJECT_STATUS.md](PROJECT_STATUS.md) is an earlier dated assessment. Preserve the prototype as a design reference while replacing simulated actions with real behavior.

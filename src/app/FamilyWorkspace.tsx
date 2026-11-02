@@ -162,7 +162,7 @@ export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingCha
 
   return <div className="space-y-5">
       <div className="rounded-xl border border-[#0C7A8D]/20 bg-[#E4EFF2] p-4 text-sm text-[#095969]">
-        {cloudUid ? <><strong>Cloud account.</strong> Records save to the signed-in account after the server confirms them. Refresh to see changes from another device. Cloud setup is still in development.</> : <><strong>Saved on this device.</strong> Profiles, logs, and any locations stay in this browser, are not synced, and can be lost if its data is cleared. Avoid sensitive personal details.</>}
+        {cloudUid ? <><strong>Cloud account.</strong> Records save to the signed-in account after the server confirms them. Refresh to see changes from another device. This development preview is for fictional data only.</> : <><strong>Saved on this device.</strong> Profiles, logs, and any locations stay in this browser, are not synced, and can be lost if its data is cleared. Avoid sensitive personal details.</>}
       </div>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {!showAll && !cloudUid && <FamilyBackup family={family} canExport={!storageBlocked} onRestore={restore} />}

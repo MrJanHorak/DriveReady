@@ -4,6 +4,7 @@ test("local and cloud workspaces stay separate across import, edit, reload and s
   const email = `browser-${Date.now()}@example.test`;
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/");
+  await expect(page.getByText("Use fictional names, notes, and locations only.", { exact: false })).toBeVisible();
   await page.getByLabel("Learner name or nickname").fill("Local learner");
   await page.getByRole("button", { name: "Add learner" }).click();
   await page.getByRole("button", { name: "Log a drive" }).click();

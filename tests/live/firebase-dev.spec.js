@@ -46,6 +46,18 @@ test("live development browser can save, reload and export synthetic records", a
     const result = JSON.parse(readFileSync(await (await download).path(), "utf8"));
     expect(result.drives).toHaveLength(1);
     expect(result.drives[0]).toMatchObject({ minutes: 30, notes: "Synthetic live browser test" });
+    const upload = (data) => page.getByLabel("Choose backup to copy to cloud").setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(data)) });
+    await upload(result);
+    await page.getByRole("button", { name: "Copy to account" }).click();
+    await expect(page.getByText(/Import finished: 0 copied, 2 already present, 0 conflicts/)).toBeVisible({ timeout: 20000 });
+    const recovery = structuredClone(result);
+    recovery.learners[0].id = "synthetic-restored-learner";
+    recovery.learners[0].name = "Synthetic restored learner";
+    recovery.drives[0].id = "synthetic-restored-drive";
+    recovery.drives[0].learnerId = "synthetic-restored-learner";
+    await upload(recovery);
+    await page.getByRole("button", { name: "Copy to account" }).click();
+    await expect(page.getByText(/Import finished: 2 copied, 0 already present, 0 conflicts/)).toBeVisible({ timeout: 20000 });
   } finally {
     if (user && /^[A-Za-z0-9_-]{20,128}$/.test(user.uid)) {
       try {

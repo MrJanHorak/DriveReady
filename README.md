@@ -24,7 +24,7 @@ The route explorer and route creation wizard remain design previews with sample 
 
 See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the assessment and known gaps, [PRODUCT_PLAN.md](PRODUCT_PLAN.md) for the product vision and proposed phases, and [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for the Firebase work in progress. With a configured Firebase project, signed-in users can explicitly choose local or cloud records; these copies do not sync automatically. Cloud integration remains in development and needs end-to-end and security review before use with real family data.
 
-The account panel can download a cloud backup separately from the browser-local backup. It reads learners and drives separately, so simultaneous edits on other devices may be reflected at different moments. Both backup files contain readable personal details and locations. The restore screen replaces browser-local data after review and confirmation; it does not write directly to the cloud. It accepts files up to 5 MB, and larger downloads display a warning.
+The account panel can download a cloud backup separately from the browser-local backup. It reads learners and drives separately, so simultaneous edits on other devices may be reflected at different moments. Both backup files contain readable personal details and locations. After review, a backup can replace browser-local data or be copied into the cloud account; cloud copying skips identical records and conflicts rather than overwriting them. Both screens accept files up to 5 MB, and larger downloads display a warning.
 
 ## Project structure
 

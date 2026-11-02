@@ -1,0 +1,25 @@
+# DriveReady development security review
+
+Internal review, November 2, 2026. This is not an independent security assessment. The development Firebase project is intended for synthetic test data; no conclusion here authorizes a real-data pilot.
+
+## Current protections
+
+- Firestore rules restrict learner and drive reads and writes to the matching authenticated user ID, validate record fields and reject deletion, unsupported paths, and moving a drive to another learner. Emulator tests cover cross-account document and collection access and mixed-authority batch writes.
+- The cloud workspace requires explicit selection and server-confirmed writes. Conflict and uncertain-save handling require a refresh before another cloud write. Local and cloud copies are separate.
+- The app labels the account and cloud workspace as a development preview and asks for fictional data. Downloaded backups are readable files; the UI warns users to store them privately. Cloud backup reads are not a single atomic snapshot.
+- A live smoke test with synthetic accounts checked sign-in, private reads and writes, cross-account denial, and cleanup. A live browser test checked saving, reload and export. These tests do not cover every failure or attack.
+
+## Findings to resolve before a real-data pilot
+
+1. **Account and abuse controls:** Email/password signup is enabled on the development project. The application does not require email verification before cloud access, implement an invitation or enrollment control, or establish a production password and abuse-prevention policy. Decide the intended access model and configure and verify server-side enforcement; hiding a button alone is not an access control.
+2. **Deletion and retention:** Firestore rules currently deny deletion, and the app has no end-user cloud data or account deletion flow. Decide retention, deletion and recovery requirements, including how learner, drive, account, backup and local-browser copies are handled, before collecting real data.
+3. **Backups and recovery:** Backups require an explicit download; there is no operator-managed backup or tested production recovery process. Cloud exports read learners and drives separately. Backups up to 5 MB can be reviewed and copied into the cloud without overwriting conflicts, or restored to browser-local storage. Files over 5 MB download with a warning but cannot be restored through the current UI. Decide and test an appropriate production recovery approach.
+4. **Privacy and access:** Records can contain learner information, notes and locations. Define the data to collect, who can access it, handling for shared devices and exports, retention, and the user-facing privacy notice. The initial model is a single supervisor; invitations and learner access need a separately designed authorization model.
+5. **Production operations:** No production Firebase project, environment, incident process, operational monitoring or reviewed access policy is configured. Keep development and production separate and review IAM, billing and usage controls, rules deployment and recovery procedures before launch.
+6. **Independent review:** The rules, application flows and proposed production configuration still require review by someone independent of this implementation. Local tests and this document are evidence for that review, not a substitute for it.
+
+## Dependency review
+
+The npm audit on November 2, 2026 reported no known vulnerabilities after removing unused React Router, updating Vite and other build dependencies, and overriding Firestore's gRPC dependency to `1.14.7`. The gRPC advisory applies to particular server-side certificate-authentication configurations; this project uses Firestore as a client and does not implement the described gRPC server configuration. See the [gRPC maintainer advisory](https://github.com/grpc/grpc-node/security/advisories/GHSA-m9gg-hp2v-232j).
+
+The gRPC override is outside the version range declared by the current Firebase Firestore package. Emulator integration and a live development SDK smoke test passed with it, but this is not a vendor compatibility guarantee. Revisit the override when Firebase updates its dependency and rerun the emulator, browser and live development tests after dependency changes. Audit results are a point-in-time signal, not proof that the application is secure.
