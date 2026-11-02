@@ -1,24 +1,17 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
-test("cloud backup fetches the latest records and restores explicitly to the browser", async ({ page }) => {
+test("cloud backup fetches the latest account records", async ({ page }) => {
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/");
-  await page.getByLabel("Learner name or nickname").fill("Local learner");
-  await page.getByRole("button", { name: "Add learner" }).click();
-  await page.getByRole("button", { name: "Log a drive" }).click();
-  await page.getByLabel("Total duration (minutes)").fill("30");
-  await page.getByRole("button", { name: "Save drive" }).click();
   await page.getByRole("button", { name: "Create an account" }).click();
   await page.getByLabel("Email", { exact: true }).fill(`backup-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
-  await page.getByRole("button", { name: "Review local records to copy" }).click();
-  await page.getByRole("button", { name: "Copy to account" }).click();
-  await expect(page.getByText(/Import finished: 2 copied/)).toBeVisible();
-  await page.getByRole("button", { name: "Use cloud account" }).click();
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByLabel("Learner name or nickname").fill("Cloud learner");
+  await page.getByRole("button", { name: "Add learner" }).click();
+  await page.getByRole("button", { name: "Log a drive" }).click();
   await page.getByLabel("Total duration (minutes)").fill("45");
   await page.getByLabel("Notes").fill("Cloud-only note");
   await page.getByRole("button", { name: "Save drive" }).click();
@@ -34,14 +27,6 @@ test("cloud backup fetches the latest records and restores explicitly to the bro
   expect(backup.drives).toHaveLength(1);
   expect(backup.drives[0]).toMatchObject({ minutes: 45, notes: "Cloud-only note" });
 
-  await page.getByRole("button", { name: "Use this browser" }).click();
-  await expect(page.getByText("30m", { exact: false }).first()).toBeVisible();
-  await expect(page.getByText("Cloud-only note")).toHaveCount(0);
-  await page.getByLabel("Choose backup to review").setInputFiles({ name: "cloud.json", mimeType: "application/json", buffer: contents });
-  await expect(page.getByText("Review backup:", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Replace with this backup" }).click();
-  await expect(page.getByText("Backup restored on this browser.")).toBeVisible();
-  await expect(page.getByText("Cloud-only note")).toBeVisible();
 });
 
 test("cloud backup does not download a stale copy while offline", async ({ page, context }) => {
@@ -62,11 +47,9 @@ test("cloud backup does not download a stale copy while offline", async ({ page,
   } finally { await context.setOffline(false); }
 });
 
-test("a backup can be reviewed and copied to cloud without replacing browser data or conflicts", async ({ page }) => {
+test("a backup can be reviewed and copied to cloud without overwriting conflicts", async ({ page }) => {
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/");
-  await page.getByLabel("Learner name or nickname").fill("Browser learner");
-  await page.getByRole("button", { name: "Add learner" }).click();
   await page.getByRole("button", { name: "Create an account" }).click();
   await page.getByLabel("Email", { exact: true }).fill(`restore-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
@@ -88,12 +71,9 @@ test("a backup can be reviewed and copied to cloud without replacing browser dat
   await upload({ ...backup, learners: [{ id: "backup-learner", name: "Different learner" }] });
   await page.getByRole("button", { name: "Copy to account" }).click();
   await expect(page.getByText(/Import finished: 0 copied, 0 already present, 2 conflicts/)).toBeVisible();
-  await page.getByRole("button", { name: "Use cloud account" }).click();
+  await page.getByRole("button", { name: "Refresh cloud records" }).click();
   await expect(page.getByRole("combobox", { name: "Learner" })).toHaveValue("backup-learner");
   await expect(page.getByText("Backup note")).toBeVisible();
-  await page.getByRole("button", { name: "Use this browser" }).click();
-  await expect(page.getByRole("option", { name: "Browser learner" })).toHaveCount(1);
-  await expect(page.getByText("Backup note")).toHaveCount(0);
 });
 
 test("invalid or oversized backup files cannot be copied to cloud", async ({ page }) => {

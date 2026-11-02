@@ -7,6 +7,7 @@ const INVITATION_LIFETIME_MS = 48 * 60 * 60 * 1000;
 const idPattern = /^[A-Za-z0-9_-]{1,128}$/;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const invitationIdPattern = /^[a-f0-9]{64}$/;
+const operationIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const unavailable = () => new Error("Invitation cannot be accepted.");
 const unauthorized = () => new Error("Not authorized.");
 
@@ -27,6 +28,11 @@ function invitationVersion(space) {
   const version = space.invitationVersion;
   if (!Number.isSafeInteger(version) || version < 0 || version >= Number.MAX_SAFE_INTEGER) throw unauthorized();
   return version;
+}
+function validDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 export function createSharedAccessService({ db, auth, now = Date.now }) {
@@ -179,5 +185,30 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       tx.delete(link);
     });
   }
-  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember };
+
+  async function createDrive({ idToken, spaceId, operationId, date, minutes, nightMinutes, notes, supervisorPresentUid }) {
+    const caller = await identity(idToken);
+    if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || !validDate(date) ||
+      typeof minutes !== "string" || !/^[1-9]\d{0,3}$/.test(minutes) || Number(minutes) > 1440 ||
+      typeof nightMinutes !== "string" || !/^(0|[1-9]\d{0,3})$/.test(nightMinutes) || Number(nightMinutes) > Number(minutes) ||
+      typeof notes !== "string" || notes.length > 1000) throw new Error("Invalid drive details.");
+    const presentUid = checkId(supervisorPresentUid);
+    const { space, member } = refs(spaceId, caller.uid);
+    const present = space.collection("members").doc(presentUid);
+    const drive = space.collection("drives").doc(operationId);
+    const data = { date, minutes: Number(minutes), nightMinutes: Number(nightMinutes), notes, recordedByUid: caller.uid, lastEditedByUid: caller.uid, supervisorPresentUid: presentUid };
+    return db.runTransaction(async (tx) => {
+      const [spaceSnap, actorSnap, presentSnap, existing] = await tx.getAll(space, member, present, drive);
+      const supervisor = (snapshot) => snapshot.exists && snapshot.data().active === true && ["manager", "supervisor"].includes(snapshot.data().role) && (snapshot.data().role !== "manager" || snapshot.id === spaceSnap.data()?.managerUid);
+      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !supervisor(actorSnap) || !supervisor(presentSnap)) throw unauthorized();
+      if (existing.exists) {
+        const saved = existing.data();
+        if (!Object.entries(data).every(([key, value]) => saved[key] === value)) throw new Error("Drive operation conflicts with an existing record.");
+        return { driveId: drive.id, created: false };
+      }
+      tx.create(drive, { ...data, createdAt: FieldValue.serverTimestamp() });
+      return { driveId: drive.id, created: true };
+    });
+  }
+  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive };
 }

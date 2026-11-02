@@ -1,6 +1,7 @@
 import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { initializeApp as initializeAdmin, deleteApp as deleteAdmin } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
@@ -35,7 +36,7 @@ async function account(label) {
   await signInWithEmailAndPassword(auth, email, password);
   const db = getFirestore(app);
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
-  return { email, token: await auth.currentUser.getIdToken(true), db };
+  return { uid: auth.currentUser.uid, email, token: await auth.currentUser.getIdToken(true), db };
 }
 function post(path, token, body, headers = {}) {
   return fetch(`${endpoint}${path}`, { method: "POST", headers: { Origin: origin, Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
@@ -74,4 +75,9 @@ test("gateway verifies accounts and invitation scope before granting access", as
   assert.equal((await post("/v1/invitations/accept", learner.token, { spaceId, token })).status, 200);
   assert.equal((await getDocFromServer(doc(learner.db, `spaces/${spaceId}`))).exists(), true);
   assert.equal((await post("/v1/invitations/accept", learner.token, { spaceId, token })).status, 403);
+  const drive = { spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "45", nightMinutes: "10", notes: "Synthetic notes", supervisorPresentUid: manager.uid };
+  assert.equal((await post("/v1/drives", learner.token, drive)).status, 403);
+  assert.equal((await post("/v1/drives", manager.token, { ...drive, recordedByUid: learner.uid })).status, 400);
+  assert.equal((await post("/v1/drives", manager.token, drive)).status, 200);
+  assert.equal((await getDocFromServer(doc(learner.db, `spaces/${spaceId}/drives/${drive.operationId}`))).data().recordedByUid, manager.uid);
 });

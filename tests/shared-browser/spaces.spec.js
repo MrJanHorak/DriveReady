@@ -136,14 +136,13 @@ test("pending shared and existing cloud operations block conflicting actions", a
     await pending;
     await expect(page.getByRole("button", { name: "Sign out" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Route Explorer" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Use cloud account" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Refresh cloud records" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Download cloud backup" })).toBeDisabled();
     release();
     await expect(page.getByText("Learner space created.")).toBeVisible();
     await page.unroute("**/v1/spaces");
-    await page.getByLabel("Learner name or nickname").fill("Local learner");
-    await page.getByRole("button", { name: "Add learner" }).click();
-    await page.getByRole("button", { name: "Review local records to copy" }).click();
+    const backup = { version: 1, learners: [{ id: "busy-learner", name: "Backup learner" }], drives: [] };
+    await page.getByLabel("Choose backup to copy to cloud").setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(backup)) });
     pending = new Promise((resolve) => { reached = resolve; });
     gate = new Promise((resolve) => { release = resolve; });
     await page.route("**/documents:commit", async (route) => { reached(); await gate; await route.continue(); });
@@ -151,7 +150,7 @@ test("pending shared and existing cloud operations block conflicting actions", a
     await pending;
     await expect(page.getByRole("button", { name: "Sign out" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Route Explorer" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Use cloud account" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Refresh cloud records" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Create shared space" })).toBeDisabled();
     release();
     await expect(page.getByText(/Import finished: 1 copied/)).toBeVisible();

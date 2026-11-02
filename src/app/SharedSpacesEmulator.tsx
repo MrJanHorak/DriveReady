@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readSharedMembers, readSharedSpaces, sharedAccessRequest } from "./sharedAccessEmulator";
+import SharedPracticeEmulator from "./SharedPracticeEmulator";
 
 type Space = { id: string; learnerName: string; role: string };
 type Preview = { learnerName: string; role: string; expiresAt: number };
@@ -110,6 +111,7 @@ export default function SharedSpacesEmulator({ uid, verified, disabled, onBusyCh
     {status && <p role="status" className="mt-2 text-sm">{status}</p>}
     <div className="mt-3 flex items-center gap-2"><button type="button" disabled={busy || disabled || !verified} className={button} onClick={() => { setStatus(""); void refresh(); void refreshMembers(); void refreshInvitations(); }}>Refresh spaces</button><span className="text-sm">{spaces.length} {spaces.length === 1 ? "space" : "spaces"}</span></div>
     {spaces.length > 0 && <ul className="mt-2 space-y-1 text-sm" aria-label="Shared spaces">{spaces.map((space) => <li key={space.id}>{space.learnerName} · {space.role}</li>)}</ul>}
+    <SharedPracticeEmulator uid={uid} spaces={spaces} blocked={blocked} run={run} />
     <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); void run(async () => { await sharedAccessRequest(uid, "createSpace", { learnerName: learnerName.trim() }); setLearnerName(""); const loaded = await refresh(); setStatus(loaded ? "Learner space created." : "Learner space created, but the list could not refresh."); }); }}>
       <label className="text-sm">Learner name for shared space<input className={`${field} mt-1`} value={learnerName} maxLength={60} required disabled={blocked} onChange={(event) => setLearnerName(event.target.value)} /></label><button className={button} disabled={blocked}>Create shared space</button>
     </form>

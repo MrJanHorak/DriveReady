@@ -7,8 +7,7 @@ async function setup(page, prefix) {
   await page.getByLabel("Email", { exact: true }).fill(`${prefix}-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Use cloud account" })).toBeVisible();
-  await page.getByRole("button", { name: "Use cloud account" }).click();
+  await expect(page.getByText("Practice records: Cloud account")).toBeVisible();
   await page.getByLabel("Learner name or nickname").fill("Cloud learner");
   await page.getByRole("button", { name: "Add learner" }).click();
   await page.getByRole("button", { name: "Log a drive" }).click();
@@ -69,7 +68,6 @@ test("closing a tab after a server commit does not duplicate the saved drive", a
   const reopened = await context.newPage();
   reopened.on("dialog", (dialog) => dialog.accept());
   await reopened.goto("/");
-  await reopened.getByRole("button", { name: "Use cloud account" }).click();
   await expect(reopened.locator("article")).toHaveCount(1);
   await expect(reopened.locator("article")).toContainText("30m");
 });
@@ -97,11 +95,6 @@ test("a lost commit response requires a refresh before retrying", async ({ page 
 test("an import interrupted by lost connectivity remains safe to retry", async ({ page, context }) => {
   test.setTimeout(60000);
   await page.goto("/");
-  await page.getByLabel("Learner name or nickname").fill("Local learner");
-  await page.getByRole("button", { name: "Add learner" }).click();
-  await page.getByRole("button", { name: "Log a drive" }).click();
-  await page.getByLabel("Total duration (minutes)").fill("30");
-  await page.getByRole("button", { name: "Save drive" }).click();
   await page.getByRole("button", { name: "Create an account" }).click();
   await page.getByLabel("Email", { exact: true }).fill(`import-offline-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
@@ -114,14 +107,15 @@ test("an import interrupted by lost connectivity remains safe to retry", async (
     if (++commits === 2) { await context.setOffline(true); cutConnection(); }
     await route.continue().catch(() => {});
   });
-  await page.getByRole("button", { name: "Review local records to copy" }).click();
+  const backup = { version: 1, learners: [{ id: "offline-learner", name: "Backup learner" }], drives: [{ id: "offline-drive", learnerId: "offline-learner", date: "2026-11-01", minutes: 30, nightMinutes: 0, skills: "", notes: "" }] };
+  const file = { name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(backup)) };
+  await page.getByLabel("Choose backup to copy to cloud").setInputFiles(file);
   await page.getByRole("button", { name: "Copy to account" }).click();
   await disconnected;
-  await expect(page.getByText("30m", { exact: false }).first()).toBeVisible();
   await context.setOffline(false);
   await page.unroute("**/documents:commit");
   await expect(page.getByText(/Import (was interrupted|finished)/)).toBeVisible({ timeout: 45000 });
-  await page.getByRole("button", { name: "Review local records to copy" }).click();
+  await page.getByLabel("Choose backup to copy to cloud").setInputFiles(file);
   await page.getByRole("button", { name: "Copy to account" }).click();
   await expect(page.getByText(/0 conflicts skipped/)).toBeVisible({ timeout: 45000 });
   await page.getByRole("button", { name: "Refresh cloud count" }).click();

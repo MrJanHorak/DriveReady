@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { emptyFamily, formatMinutes, locationMapUrl, placeMapUrl, readFamily, routeMapUrl, STORAGE_KEY, summarizeDrives, validCalendarDate, validCloudRouteUrl, validRouteUrl } from "./familyData";
+import { emptyFamily, formatMinutes, locationMapUrl, placeMapUrl, routeMapUrl, summarizeDrives, validCalendarDate, validCloudRouteUrl, validRouteUrl } from "./familyData";
 import PracticeCoverage, { PracticeChoices } from "./PracticeCoverage";
 import GettingStarted from "./GettingStarted";
-import FamilyBackup from "./FamilyBackup";
 import { db } from "./firebaseClient";
 import { createCloudRecord, readCloudFamily, replaceCloudRecord } from "./cloudFamily";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
@@ -21,19 +20,14 @@ const today = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 
-export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingChange }: { showAll?: boolean; cloudUid?: string; onSavingChange?: (saving: boolean) => void }) {
-  const [initial] = useState(() => {
-    if (cloudUid) return { data: emptyFamily() as Family, error: "" };
-    try { return { data: readFamily(window.localStorage) as Family, error: "" }; }
-    catch { return { data: emptyFamily() as Family, error: "Saved data could not be read. Your existing data has not been changed. Check your browser storage before continuing." }; }
-  });
-  const [family, setFamily] = useState<Family>(initial.data);
-  const [cloudLoading, setCloudLoading] = useState(!!cloudUid);
+export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingChange }: { showAll?: boolean; cloudUid: string; onSavingChange?: (saving: boolean) => void }) {
+  const [family, setFamily] = useState<Family>(() => emptyFamily() as Family);
+  const [cloudLoading, setCloudLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  const [storageBlocked, setStorageBlocked] = useState(!!initial.error);
-  const [error, setError] = useState(initial.error);
-  const [selectedId, setSelectedId] = useState(initial.data.learners[0]?.id ?? "");
+  const [storageBlocked, setStorageBlocked] = useState(false);
+  const [error, setError] = useState("");
+  const [selectedId, setSelectedId] = useState("");
   const [name, setName] = useState("");
   const [editing, setEditing] = useState<Drive | null>(null);
   const [adding, setAdding] = useState(false);
@@ -68,25 +62,6 @@ export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingCha
     return () => { active = false; };
   }, [cloudUid]);
 
-  function save(next: Family, restoring = false) {
-    if (storageBlocked && !restoring) return false;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      setFamily(next);
-      setStorageBlocked(false);
-      setError("");
-      return true;
-    } catch {
-      setError("Your changes could not be saved in this browser. Check browser storage and try again.");
-      return false;
-    }
-  }
-  function restore(next: Family) {
-    if (!save(next, true)) return false;
-    locationRequest.current += 1; setLocating(false); setAdding(false); setEditing(null);
-    setSelectedId(next.learners[0]?.id ?? "");
-    return true;
-  }
   async function saveCloud(kind: "learners" | "drives", record: Learner | Drive, original?: Drive) {
     if (!db || !cloudUid || savingRef.current || cloudLoading || storageBlocked) return false;
     savingRef.current = true; setSaving(true); onSavingChange?.(true); setError("");
@@ -107,9 +82,9 @@ export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingCha
     if (!trimmed) return;
     const learner = { id: id(), name: trimmed };
     const next = { ...family, learners: [...family.learners, learner] };
-    const saved = cloudUid ? await saveCloud("learners", learner) : save(next);
+    const saved = await saveCloud("learners", learner);
     if (saved) {
-      if (cloudUid) setFamily(next);
+      setFamily(next);
       setSelectedId(learner.id); setName(""); setAdding(false); setEditing(null);
     }
   }
@@ -143,7 +118,7 @@ export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingCha
       setFormError("Enter a date, a whole-number duration of at least one minute, and night minutes no greater than the total."); return;
     }
     if (!validRouteUrl(routeUrl)) { setFormError("Enter a complete HTTPS route link, or leave it blank."); return; }
-    if (cloudUid && !validCloudRouteUrl(routeUrl.trim())) { setFormError("For cloud records, use an HTTPS link with a standard domain name and no custom port, or leave it blank."); return; }
+    if (!validCloudRouteUrl(routeUrl.trim())) { setFormError("For cloud records, use an HTTPS link with a standard domain name and no custom port, or leave it blank."); return; }
     const start = routeStart.trim(), end = routeEnd.trim();
     const stops = routeStops.split("\n").map((stop) => stop.trim()).filter(Boolean);
     if ((start || end || stops.length) && (!start || !end)) { setFormError("Enter both a start and destination for the route, or clear the route fields."); return; }
@@ -153,8 +128,8 @@ export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingCha
     const drive: Drive = { ...editing, id: editing?.id ?? id(), learnerId: selectedId, date, minutes: total, nightMinutes: night, skills: skills.trim(), notes: notes.trim(), place: place.trim(), routeUrl: routeUrl.trim(), location, route, practicedSkills, practicedConditions };
     const drives = editing ? family.drives.map((item) => item.id === editing.id ? drive : item) : [...family.drives, drive];
     const next = { ...family, drives };
-    const saved = cloudUid ? await saveCloud("drives", drive, editing ?? undefined) : save(next);
-    if (saved) { if (cloudUid) setFamily(next); setAdding(false); setEditing(null); }
+    const saved = await saveCloud("drives", drive, editing ?? undefined);
+    if (saved) { setFamily(next); setAdding(false); setEditing(null); }
   }
   const learner = family.learners.find((item) => item.id === selectedId);
   const summary = summarizeDrives(family.drives, selectedId);
@@ -162,10 +137,9 @@ export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingCha
 
   return <div className="space-y-5">
       <div className="rounded-xl border border-[#0C7A8D]/20 bg-[#E4EFF2] p-4 text-sm text-[#095969]">
-        {cloudUid ? <><strong>Cloud account.</strong> Records save to the signed-in account after the server confirms them. Refresh to see changes from another device. This development preview is for fictional data only.</> : <><strong>Saved on this device.</strong> Profiles, logs, and any locations stay in this browser, are not synced, and can be lost if its data is cleared. Avoid sensitive personal details.</>}
+        <><strong>Cloud account.</strong> Records save to the signed-in account after the server confirms them. Refresh to see changes from another device. This development preview is for fictional data only.</>
       </div>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-      {!showAll && !cloudUid && <FamilyBackup family={family} canExport={!storageBlocked} onRestore={restore} />}
       {cloudLoading && <p role="status" className="text-sm text-muted-foreground">Loading cloud records…</p>}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div><h2 className="text-xl font-bold">{showAll ? "Driving logs" : "Your family’s practice"}</h2><p className="mt-1 text-sm text-muted-foreground">A simple place to record practice and see how it adds up.</p></div>

@@ -12,6 +12,7 @@ const routes = Object.freeze({
   "/v1/invitations/list": { action: "listInvitations", fields: ["spaceId", "cursor"] },
   "/v1/invitations/cancel-by-id": { action: "cancelInvitationById", fields: ["spaceId", "invitationId"] },
   "/v1/members/remove": { action: "removeMember", fields: ["spaceId", "memberUid"] },
+  "/v1/drives": { action: "createDrive", fields: ["spaceId", "operationId", "date", "minutes", "nightMinutes", "notes", "supervisorPresentUid"] },
 });
 
 function readBody(req) {

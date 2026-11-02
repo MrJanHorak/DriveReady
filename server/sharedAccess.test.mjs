@@ -1,6 +1,6 @@
 import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { initializeApp as initializeAdmin, deleteApp as deleteAdmin } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
@@ -178,4 +178,40 @@ test("invitation pages scan past expired records and remain manager-only", async
   assert.equal(third.invitations.length, 3);
   assert.equal(third.nextCursor, null);
   assert.equal(new Set([...second.invitations, ...third.invitations].map((item) => item.id)).size, 27);
+});
+
+test("shared drives require active supervisors, preserve attribution and reject duplicate changes", async () => {
+  const manager = await account("manager-drive"), adult = await account("adult-drive"), learner = await account("learner-drive"), outsider = await account("outsider-drive");
+  const { spaceId } = await service.createSpace({ idToken: manager.token, learnerName: "Drive learner" });
+  const sibling = await service.createSpace({ idToken: manager.token, learnerName: "Other learner" });
+  for (const [person, role] of [[adult, "supervisor"], [learner, "learner"]]) {
+    const invite = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: person.email, role });
+    await service.acceptInvitation({ idToken: person.token, spaceId, token: invite.token });
+  }
+  const input = { spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "60", nightMinutes: "15", notes: "Synthetic shared notes", supervisorPresentUid: manager.uid };
+  await assert.rejects(service.createDrive({ ...input, idToken: learner.token }), /Not authorized/);
+  await assert.rejects(service.createDrive({ ...input, idToken: outsider.token }), /Not authorized/);
+  await assert.rejects(service.createDrive({ ...input, idToken: adult.token, supervisorPresentUid: learner.uid }), /Not authorized/);
+  await assert.rejects(service.createDrive({ ...input, idToken: adult.token, supervisorPresentUid: outsider.uid }), /Not authorized/);
+  await assert.rejects(service.createDrive({ ...input, idToken: adult.token, spaceId: sibling.spaceId }), /Not authorized/);
+  for (const changes of [{ date: "2026-02-30" }, { minutes: "0" }, { minutes: "1441" }, { nightMinutes: "61" }, { notes: "x".repeat(1001) }, { operationId: "bad/id" }]) {
+    await assert.rejects(service.createDrive({ ...input, ...changes, idToken: adult.token }), /Invalid drive details/);
+  }
+  const race = await Promise.all([service.createDrive({ ...input, idToken: adult.token }), service.createDrive({ ...input, idToken: adult.token })]);
+  assert.deepEqual(race.map((item) => item.created).sort(), [false, true]);
+  const saved = (await getDocFromServer(doc(learner.db, `spaces/${spaceId}/drives/${input.operationId}`))).data();
+  assert.equal(saved.recordedByUid, adult.uid);
+  assert.equal(saved.lastEditedByUid, adult.uid);
+  assert.equal(saved.supervisorPresentUid, manager.uid);
+  assert.equal(saved.notes, input.notes);
+  await assert.rejects(service.createDrive({ ...input, idToken: adult.token, notes: "Changed" }), /conflicts/);
+  await assert.rejects(getDocFromServer(doc(outsider.db, `spaces/${spaceId}/drives/${input.operationId}`)), /permission/i);
+  await assert.rejects(getDocFromServer(doc(learner.db, `spaces/${sibling.spaceId}/drives/${input.operationId}`)), /permission/i);
+  await assert.rejects(setDoc(doc(adult.db, `spaces/${spaceId}/drives/forged`), { recordedByUid: manager.uid }), /permission/i);
+  const self = await service.createDrive({ ...input, operationId: randomUUID(), idToken: manager.token });
+  assert.equal(self.created, true);
+  await service.removeMember({ idToken: manager.token, spaceId, memberUid: adult.uid });
+  await assert.rejects(service.createDrive({ ...input, operationId: randomUUID(), idToken: adult.token }), /Not authorized/);
+  await assert.rejects(service.createDrive({ ...input, operationId: randomUUID(), supervisorPresentUid: adult.uid, idToken: manager.token }), /Not authorized/);
+  assert.equal((await getDocFromServer(doc(learner.db, `spaces/${spaceId}/drives/${input.operationId}`))).data().recordedByUid, adult.uid);
 });

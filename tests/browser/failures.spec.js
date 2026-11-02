@@ -15,7 +15,6 @@ test("two browsers report a stale edit and preserve the saved version", async ({
     await first.getByLabel("Password", { exact: true }).fill(password);
     await first.getByRole("button", { name: "Create account", exact: true }).click();
     await expect(first.getByText(`Signed in as ${email}`)).toBeVisible();
-    await first.getByRole("button", { name: "Use cloud account" }).click();
     await first.getByLabel("Learner name or nickname").fill("Cloud learner");
     await first.getByRole("button", { name: "Add learner" }).click();
     await first.getByRole("button", { name: "Log a drive" }).click();
@@ -28,7 +27,6 @@ test("two browsers report a stale edit and preserve the saved version", async ({
     await second.getByLabel("Password", { exact: true }).fill(password);
     await second.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(second.getByText(`Signed in as ${email}`)).toBeVisible();
-    await second.getByRole("button", { name: "Use cloud account" }).click();
     await expect(second.getByText("30m", { exact: false }).first()).toBeVisible();
     await second.getByRole("button", { name: "Edit", exact: true }).click();
     await second.getByLabel("Total duration (minutes)").fill("60");
@@ -46,13 +44,8 @@ test("two browsers report a stale edit and preserve the saved version", async ({
   }
 });
 
-test("interrupted import preserves the local copy and retry completes it", async ({ page }) => {
+test("interrupted backup import can be retried", async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("Learner name or nickname").fill("Local learner");
-  await page.getByRole("button", { name: "Add learner" }).click();
-  await page.getByRole("button", { name: "Log a drive" }).click();
-  await page.getByLabel("Total duration (minutes)").fill("30");
-  await page.getByRole("button", { name: "Save drive" }).click();
   await page.getByRole("button", { name: "Create an account" }).click();
   await page.getByLabel("Email", { exact: true }).fill(`interrupt-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
@@ -69,19 +62,20 @@ test("interrupted import preserves the local copy and retry completes it", async
     else if (commits === 2) await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: { code: 403, status: "PERMISSION_DENIED", message: "Injected failure" } }) });
     else await route.continue();
   });
-  await page.getByRole("button", { name: "Review local records to copy" }).click();
+  const backup = { version: 1, learners: [{ id: "interrupted-learner", name: "Backup learner" }], drives: [{ id: "interrupted-drive", learnerId: "interrupted-learner", date: "2026-11-01", minutes: 30, nightMinutes: 0, skills: "", notes: "" }] };
+  const file = { name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(backup)) };
+  await page.getByLabel("Choose backup to copy to cloud").setInputFiles(file);
   await page.getByRole("button", { name: "Copy to account" }).click();
   await pending;
   await expect(page.getByRole("button", { name: "Sign out" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Use cloud account" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Refresh cloud records" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Driving Logs" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Add learner" })).toBeDisabled();
   release();
   await expect(page.getByText("Import was interrupted.", { exact: false })).toBeVisible();
   expect(commits).toBe(2);
-  await expect(page.getByText("30m", { exact: false }).first()).toBeVisible();
   await page.unroute(commitUrl);
-  await page.getByRole("button", { name: "Review local records to copy" }).click();
+  await page.getByLabel("Choose backup to copy to cloud").setInputFiles(file);
   await page.getByRole("button", { name: "Copy to account" }).click();
   await expect(page.getByText(/1 copied, 1 already present/)).toBeVisible();
 });
@@ -93,8 +87,7 @@ test("a pending cloud save blocks sign-out and a rejected save keeps the form", 
   await page.getByLabel("Email", { exact: true }).fill(`save-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Use cloud account" })).toBeVisible();
-  await page.getByRole("button", { name: "Use cloud account" }).click();
+  await expect(page.getByText("Practice records: Cloud account")).toBeVisible();
   await page.getByLabel("Learner name or nickname").fill("Cloud learner");
   await page.getByRole("button", { name: "Add learner" }).click();
   await page.getByRole("button", { name: "Log a drive" }).click();
@@ -111,9 +104,9 @@ test("a pending cloud save blocks sign-out and a rejected save keeps the form", 
   await page.getByRole("button", { name: "Save drive" }).click();
   await pending;
   await expect(page.getByRole("button", { name: "Sign out" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Use this browser" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Refresh cloud records" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Driving Logs" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Review local records to copy" })).toBeDisabled();
+  await expect(page.getByLabel("Choose backup to copy to cloud")).toBeDisabled();
   release();
   await expect(page.getByRole("alert")).toContainText("Could not confirm the cloud save");
   await expect(page.getByLabel("Total duration (minutes)")).toHaveValue("30");
@@ -126,16 +119,15 @@ test("a pending cloud save blocks sign-out and a rejected save keeps the form", 
   await expect(page.getByText("30m", { exact: false }).first()).toBeVisible();
 });
 
-test("an incompatible local record identifies the field before any copy", async ({ page }) => {
+test("an incompatible backup identifies the field before any copy", async ({ page }) => {
   const family = { version: 1, learners: [{ id: "a", name: "Alex" }], drives: [{ id: "d", learnerId: "a", date: "2026-11-01", minutes: 30, nightMinutes: 0, skills: "", notes: "", routeUrl: "https://example.com:8443/" }] };
-  await page.addInitScript((data) => localStorage.setItem("driveready.family.v1", JSON.stringify(data)), family);
   await page.goto("/");
   await page.getByRole("button", { name: "Create an account" }).click();
   await page.getByLabel("Email", { exact: true }).fill(`invalid-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
-  await page.getByRole("button", { name: "Review local records to copy" }).click();
+  await page.getByLabel("Choose backup to copy to cloud").setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(family)) });
   await expect(page.getByText(/Drive 1: route link must use HTTPS/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy to account" })).toHaveCount(0);
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
