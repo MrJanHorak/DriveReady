@@ -22,7 +22,7 @@ service cloud.firestore {
     }
     function learner(data, id) {
       return data.keys().hasOnly(['id', 'name']) && data.keys().hasAll(['id', 'name']) &&
-        data.id == id && text(data.name, 60) && data.name.matches('.*\\S.*');
+        data.id == id && text(data.name, 60) && data.name.matches('.*[^\\s\\p{Z}\\x{000B}\\x{FEFF}].*');
     }
     function route(value) {
       return value == null || (value is map && value.keys().hasOnly(['start', 'end', 'stops']) &&

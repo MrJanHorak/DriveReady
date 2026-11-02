@@ -1,7 +1,7 @@
 import { after, before, test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { assertFails, assertSucceeds, initializeTestEnvironment } from "@firebase/rules-unit-testing";
-import { deleteDoc, doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, writeBatch } from "firebase/firestore";
 import assert from "node:assert/strict";
 import { createCloudRecord, importCloudFamily, readCloudFamily, replaceCloudRecord } from "./cloudFamily.js";
 
@@ -37,12 +37,28 @@ test("only the signed-in owner can access private family records", async () => {
   await assertSucceeds(setDoc(doc(alice, path), { id: "learner-1", name: "Test learner" }));
   await assertSucceeds(getDoc(doc(alice, path)));
   await assertFails(getDoc(doc(bob, path)));
-  await assertFails(setDoc(doc(bob, path), { name: "Changed" }));
+  await assertFails(setDoc(doc(bob, path), { id: "learner-1", name: "Changed" }));
   await assertFails(getDoc(doc(guest, path)));
-  await assertFails(setDoc(doc(guest, path), { name: "Changed" }));
+  await assertFails(setDoc(doc(guest, path), { id: "learner-1", name: "Changed" }));
+  await assertFails(getDocs(collection(bob, "users/alice/learners")));
+  await assertFails(getDocs(collection(guest, "users/alice/learners")));
+  await assertSucceeds(getDocs(collection(alice, "users/alice/learners")));
   await assertFails(setDoc(doc(alice, "publicRoutes/route-1"), { name: "Not supported" }));
+  await assertFails(setDoc(doc(alice, "users/alice"), { name: "Not supported" }));
+  await assertFails(setDoc(doc(alice, "users/alice/other/record"), { id: "record" }));
   await assertSucceeds(setDoc(doc(alice, "users/alice/drives/drive-1"), { id: "drive-1", learnerId: "learner-1", date: "2026-11-01", minutes: 30, nightMinutes: 0, skills: "", notes: "" }));
   await assertFails(getDoc(doc(bob, "users/alice/drives/drive-1")));
+});
+
+test("a batch mixing authorized and unauthorized writes is rejected atomically", async () => {
+  const alice = env.authenticatedContext("batch-alice").firestore();
+  const own = doc(alice, "users/batch-alice/learners/a");
+  const other = doc(alice, "users/batch-bob/learners/b");
+  const batch = writeBatch(alice);
+  batch.set(own, { id: "a", name: "Alice learner" });
+  batch.set(other, { id: "b", name: "Bob learner" });
+  await assertFails(batch.commit());
+  assert.equal((await getDoc(own)).exists(), false);
 });
 
 test("rules reject malformed records, orphaned drives, moves and deletes", async () => {
@@ -54,8 +70,10 @@ test("rules reject malformed records, orphaned drives, moves and deletes", async
   await assertFails(setDoc(driveRef, drive));
   await assertFails(setDoc(learnerRef, { ...learner, id: "wrong" }));
   await assertFails(setDoc(learnerRef, { ...learner, name: "  " }));
+  for (const name of ["\t", "\n", "\u000b", "\f", "\r", " ", "\u00a0", "\u1680", "\u2000", "\u200a", "\u2028", "\u2029", "\u202f", "\u205f", "\u3000", "\ufeff"]) await assertFails(setDoc(learnerRef, { ...learner, name }));
   await assertFails(setDoc(learnerRef, { ...learner, extra: true }));
   await assertSucceeds(setDoc(learnerRef, learner));
+  await assertSucceeds(setDoc(doc(db, "users/validation-owner/learners/international"), { id: "international", name: "李 雷" }));
   await assertSucceeds(setDoc(doc(db, "users/validation-owner/learners/other"), { id: "other", name: "Other" }));
   await assertSucceeds(setDoc(driveRef, { ...drive, route: { start: "A", end: "B", stops: ["C"] }, location: { latitude: 33, longitude: -82, accuracy: 10, recordedAt: "2026-11-01T12:00:00.000Z" }, practicedSkills: ["Turns"], routeUrl: "https://example.com" }));
   for (const invalid of [
