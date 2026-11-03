@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { DocumentSnapshot } from "firebase/firestore";
 import { readSharedRoutes, sharedAccessRequest } from "./sharedAccessEmulator";
+import SharedRouteCard from "./SharedRouteCard";
 
 type Space = { id: string; learnerName: string; role: string };
 type Route = { id: string; name: string; start: string; destination: string };
@@ -10,7 +12,9 @@ const button = "rounded-lg border border-border bg-card px-3 py-2 text-sm disabl
 export default function SharedRoutesEmulator({ uid, spaces, blocked, run }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void> }) {
   const [selected, setSelected] = useState("");
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [more, setMore] = useState(false);
+  const [cursor, setCursor] = useState<DocumentSnapshot | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
   const [error, setError] = useState(false);
   const [name, setName] = useState("");
   const [start, setStart] = useState("");
@@ -25,14 +29,30 @@ export default function SharedRoutesEmulator({ uid, spaces, blocked, run }: { ui
   useEffect(() => { setSelected((current) => spaces.some((space) => space.id === current) ? current : (pendingRef.current ? "" : spaces[0]?.id ?? "")); }, [spaces]);
   const refresh = useCallback(async () => {
     const request = ++generation.current;
-    setRoutes([]); setMore(false); setError(false);
+    setRoutes([]); setCursor(null); setError(false); loadingMoreRef.current = false; setLoadingMore(false);
     if (!selected) return;
     try {
       const result = await readSharedRoutes(uid, selected);
-      if (alive.current && request === generation.current) { setRoutes(result.routes as Route[]); setMore(result.more); }
+      if (alive.current && request === generation.current) { setRoutes(result.routes as Route[]); setCursor(result.cursor); }
     } catch { if (alive.current && request === generation.current) setError(true); }
   }, [uid, selected]);
   useEffect(() => { void refresh(); }, [refresh]);
+  async function loadMore() {
+    if (!cursor || !selected || blocked || loadingMoreRef.current) return;
+    const request = generation.current;
+    loadingMoreRef.current = true; setLoadingMore(true); setError(false);
+    try {
+      const result = await readSharedRoutes(uid, selected, cursor);
+      if (alive.current && request === generation.current) {
+        setRoutes((existing) => [...existing, ...(result.routes as Route[]).filter((route) => !existing.some((item) => item.id === route.id))]);
+        setCursor(result.cursor);
+      }
+    } catch {
+      if (alive.current && request === generation.current) { setRoutes([]); setCursor(null); setError(true); }
+    } finally {
+      if (alive.current && request === generation.current) { loadingMoreRef.current = false; setLoadingMore(false); }
+    }
+  }
   const space = spaces.find((item) => item.id === selected);
   const canCreate = space && ["manager", "supervisor"].includes(space.role);
   function submit(event: React.FormEvent) {
@@ -51,11 +71,12 @@ export default function SharedRoutesEmulator({ uid, spaces, blocked, run }: { ui
   return <section className="mt-4 rounded-lg bg-card p-3 text-sm">
     <h4 className="font-semibold">Shared routes · local emulator</h4>
     <p className="mt-1 text-muted-foreground">Visible only to active members of this learner’s space. These are text descriptions, not mapped paths or navigation.</p>
-    <label className="mt-3 block">Route learner<select className={`${field} mt-1`} value={selected} disabled={blocked || !!pending} onChange={(event) => { if (event.target.value === selected) return; generation.current += 1; setRoutes([]); setMore(false); setSelected(event.target.value); setMessage(""); }}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.learnerName} · {item.role}</option>)}</select></label>
+    <label className="mt-3 block">Route learner<select className={`${field} mt-1`} value={selected} disabled={blocked || !!pending} onChange={(event) => { if (event.target.value === selected) return; generation.current += 1; setRoutes([]); setCursor(null); setSelected(event.target.value); setMessage(""); }}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.learnerName} · {item.role}</option>)}</select></label>
     <div className="mt-3 flex items-center gap-2"><h5 className="font-semibold">Saved routes</h5><button type="button" className={button} disabled={blocked || !selected} onClick={() => void refresh()}>Refresh shared routes</button></div>
     {error && <p role="status">Could not load shared routes. Check access and refresh.</p>}
-    {more && <p>Showing the first 50 routes by name.</p>}
-    {space && <ul aria-label="Shared routes" className="mt-2 space-y-2">{routes.map((route) => <li key={route.id} className="rounded border border-border p-2"><strong>{route.name}</strong><p>From {route.start} to {route.destination}</p></li>)}</ul>}
+    {cursor && <p>More routes are available. Refresh to see changes made while browsing.</p>}
+    {space && <ul aria-label="Shared routes" className="mt-2 space-y-2">{routes.map((route) => <li key={route.id}><SharedRouteCard route={route} /></li>)}</ul>}
+    {cursor && <button type="button" className={`${button} mt-2`} disabled={blocked || loadingMore} onClick={() => void loadMore()}>{loadingMore ? "Loading routes…" : "Load more saved routes"}</button>}
     {canCreate && <form className="mt-4 grid gap-2 sm:grid-cols-2" onSubmit={submit}>
       <label>Route name<input className={`${field} mt-1`} value={name} maxLength={80} required disabled={blocked || !!pending} onChange={(event) => setName(event.target.value)} /></label>
       <label>Start description<input className={`${field} mt-1`} value={start} maxLength={160} required disabled={blocked || !!pending} onChange={(event) => setStart(event.target.value)} /></label>

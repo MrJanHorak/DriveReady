@@ -66,9 +66,18 @@ export async function readSharedDrives(uid, spaceId, cursor = null) {
   return { drives: page.map((item) => ({ id: item.id, ...item.data() })), cursor: snapshot.size > 50 ? page[page.length - 1] : null };
 }
 
-export async function readSharedRoutes(uid, spaceId) {
+export async function readSharedRoutes(uid, spaceId, cursor = null) {
   currentUser(uid);
-  const snapshot = await getDocsFromServer(query(collection(db, "spaces", spaceId, "routes"), orderBy("name"), limit(51)));
+  const constraints = [orderBy("name"), ...(cursor ? [startAfter(cursor)] : []), limit(51)];
+  const snapshot = await getDocsFromServer(query(collection(db, "spaces", spaceId, "routes"), ...constraints));
   currentUser(uid);
-  return { routes: snapshot.docs.slice(0, 50).map((item) => ({ id: item.id, ...item.data() })), more: snapshot.size > 50 };
+  const page = snapshot.docs.slice(0, 50);
+  return { routes: page.map((item) => ({ id: item.id, ...item.data() })), cursor: snapshot.size > 50 ? page[page.length - 1] : null };
+}
+
+export async function readSharedRoute(uid, spaceId, routeId) {
+  currentUser(uid);
+  const snapshot = await getDocFromServer(doc(db, "spaces", spaceId, "routes", routeId));
+  currentUser(uid);
+  return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
 }
