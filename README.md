@@ -16,15 +16,29 @@ Open the local address printed by Vite. Run `npm run build` to check the product
 
 For the Firebase emulator browser tests, install the Firebase CLI and Java 21 or newer, ensure Google Chrome is installed, then run `npm run test:browser`. The test starts Vite and the Auth and Firestore emulators with a demo project and synthetic data. See [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for the other emulator tests and limitations.
 
+## Try the shared family prototype
+
+Install the project dependencies, Firebase CLI, and Java 21 or newer, then run `npm run demo:shared` from this directory. Open [http://127.0.0.1:4173/](http://127.0.0.1:4173/) and sign in using any of these fictional, already verified accounts:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Managing supervisor | `manager@example.test` | `fictional-drive-123` |
+| Invited supervisor | `supervisor@example.test` | `fictional-drive-123` |
+| Learner | `learner@example.test` | `fictional-drive-123` |
+
+In the account panel, find **Shared spaces · local emulator only**. All three accounts have access to Alex Example's space and a fictional drive. As a supervisor, add practice; sign out and sign in as the learner to see the shared notes and totals. The manager can create another space, issue an invitation, and manually copy its space ID and token to the invited account; no email is sent. Use separate browser profiles or sign out between accounts. The account-scoped workspace is separate from shared practice.
+
+Use fictional data only. The command starts local Auth and Firestore emulators, the local shared gateway, and Vite; it does not connect to the development Firebase project. Ports 4000, 4173, 4175, 8080, and 9099 must be free. Press Ctrl+C to stop. Emulator data is temporary and is recreated on each run. The shared prototype is not production-ready: shared routes, drive editing, migration, recovery, and deployment are not implemented, and practice totals cover at most the 50 displayed drives.
+
 ## Current state
 
-Learners and manually entered driving logs are saved in the current browser by default. With a configured Firebase project and account, a user can instead explicitly select the early cloud workspace; the browser and cloud copies do not sync automatically. Progress is calculated from logs and can be edited. Select skills, roads, and conditions on a drive to see per-learner practice coverage; older free-text entries remain intact but must be tagged to appear in those counts. The dashboard also offers starting points and links to Georgia DDS and NHTSA guidance; community-submitted tips are not yet supported. A log can include a place, an HTTPS map link, a route described by a start, destination and up to three stops, and an optional current-location pin captured with browser permission. Place and route descriptions can be opened in Google Maps for review; Google Maps calculates the suggested path, which might differ from the actual drive. A pin is a single approximate point, not a recorded or verified route. Opening a location or route in Google Maps, or opening a saved link, sends that information to the external service. Browser data may be lost if browser data is cleared. Download and securely store a backup from the dashboard; backup files contain readable personal information and locations. Restoring a backup replaces, rather than merges with, existing browser data. The development cloud setup is for synthetic data until security and privacy review is complete.
+The normal workspace requires an account and stores its learners and manually entered drives in the configured cloud project. Older browser-local records are not automatically copied or deleted. Progress is calculated from logs and can be edited. The development cloud setup is for synthetic data until security and privacy review is complete.
 
 The route explorer and route creation wizard remain design previews with sample content and temporary state; routes are not published, location-aware, or suitable for navigation. State Requirements offers a Georgia overview and links to official sources, not a complete or personalized eligibility check; other states are not yet covered. The app does not have real mapping integration.
 
-See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the assessment and known gaps, [PRODUCT_PLAN.md](PRODUCT_PLAN.md) for the product vision and proposed phases, and [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for the Firebase work in progress. With a configured Firebase project, signed-in users can explicitly choose local or cloud records; these copies do not sync automatically. Cloud integration remains in development and needs end-to-end and security review before use with real family data.
+See [PROJECT_STATUS.md](PROJECT_STATUS.md) for an earlier assessment, [PRODUCT_PLAN.md](PRODUCT_PLAN.md) for the product vision, and [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for the current Firebase work. Cloud integration needs security review before use with real family data.
 
-The account panel can download a cloud backup separately from the browser-local backup. It reads learners and drives separately, so simultaneous edits on other devices may be reflected at different moments. Both backup files contain readable personal details and locations. After review, a backup can replace browser-local data or be copied into the cloud account; cloud copying skips identical records and conflicts rather than overwriting them. Both screens accept files up to 5 MB, and larger downloads display a warning.
+The account panel can download a cloud backup. It reads learners and drives separately, so simultaneous edits on other devices may be reflected at different moments. Backups contain readable personal details and locations. After review, a backup can be copied into the cloud account; copying skips identical records and conflicts rather than overwriting them. The import accepts files up to 5 MB; larger downloads display a warning.
 
 ## Project structure
 

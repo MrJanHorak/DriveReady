@@ -12,6 +12,7 @@
     "test:shared:browser": "firebase emulators:exec --only auth,firestore --project demo-driveready \"playwright test --config playwright.shared.config.js\"",
     "test:browser": "firebase emulators:exec --only auth,firestore --project demo-driveready \"playwright test\"",
     "test:live:dev": "playwright test --config playwright.live.config.js",
+    "demo:shared": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node scripts/shared-demo.mjs\"",
     "dev": "vite"
   },
   "dependencies": {

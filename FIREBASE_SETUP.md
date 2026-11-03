@@ -4,6 +4,8 @@ Firebase Authentication and Cloud Firestore have been selected for DriveReady. A
 
 ## Current status
 
+For a local, fictional shared-space demonstration, run `npm run demo:shared` after installing Firebase CLI, Java 21+, and the project dependencies. The command seeds three verified emulator accounts and a shared drive, and starts the local gateway and app. See [README.md](README.md#try-the-shared-family-prototype) for credentials, ports, and walkthrough. This does not deploy or use the development project; data is discarded on shutdown.
+
 With Firebase configuration, practice records require sign-in and the app opens the account-scoped cloud workspace automatically. It reads from Firestore and can create learners and create or edit logs; writes use transactions, and conflicting edits are rejected. Cloud reads require a connection and changes from another device require a manual refresh. Signing out removes account records from the displayed workspace. The former browser-local workspace is no longer shown or offered as a storage mode; existing browser data is not automatically copied or deleted and remains accessible to someone with access to that browser profile outside this UI.
 
 The account panel can download a cloud backup using fresh server reads. A backup in the existing JSON format can be reviewed and explicitly copied into a cloud account. Cloud copying adds missing records, skips identical records, and reports conflicts without overwriting them; it is not a full replacement. The original file remains unchanged. Learners and drives are read separately, so concurrent edits can produce a backup containing data from different moments. Files contain readable personal information and locations. The cloud-copy screen accepts files up to 5 MB; larger exports are still downloaded with a warning and need another recovery method.
@@ -17,7 +19,7 @@ Cloud writes have stricter limits than the existing backup parser, including fie
 - A supervisor authenticates with Firebase Authentication.
 - A supervisor's initial private records live under `users/{uid}/learners/{learnerId}` and `users/{uid}/drives/{driveId}`. Store records separately so edits do not overwrite a whole household or hit Firestore's single-document size limit.
 - The first version is single-supervisor only. Family invitations, learner access, community routes, and sharing require an explicit membership model and separate authorization rules before being enabled.
-- [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md) describes the learner-centered membership model and migration requirements. A read-only rules foundation and trusted-service prototype exist locally and are emulator-tested; they are not deployed or wired into the app. The deployed `users/{uid}` rules do not grant shared access.
+- [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md) describes the learner-centered membership model and migration requirements. A read-only rules foundation, trusted-service prototype, and opt-in emulator-only screen exist locally; they are not deployed. The deployed `users/{uid}` rules do not grant shared access.
 - Do not silently copy or delete older browser-local records. A selected backup file can be reviewed and copied into the account; it does not overwrite conflicting records.
 - Design for failed or pending writes, multi-device conflicts, logout, backup/export, and privacy of location history. Do not report a change as saved until the appropriate persistence result is known.
 

@@ -12,6 +12,7 @@ export default function SharedPracticeEmulator({ uid, spaces, blocked, run }: { 
   const [drives, setDrives] = useState<Drive[]>([]);
   const [more, setMore] = useState(false);
   const [historyError, setHistoryError] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [date, setDate] = useState("");
   const [minutes, setMinutes] = useState("");
   const [nightMinutes, setNightMinutes] = useState("0");
@@ -28,11 +29,11 @@ export default function SharedPracticeEmulator({ uid, spaces, blocked, run }: { 
   }, [spaces]);
   const refreshHistory = useCallback(async () => {
     const request = ++generation.current;
-    setDrives([]); setMore(false); setHistoryError(false);
+    setDrives([]); setMore(false); setHistoryError(false); setHistoryLoaded(false);
     if (!selected) return;
     try {
       const result = await readSharedDrives(uid, selected);
-      if (active.current && request === generation.current) { setDrives(result.drives as Drive[]); setMore(result.more); }
+      if (active.current && request === generation.current) { setDrives(result.drives as Drive[]); setMore(result.more); setHistoryLoaded(true); }
     } catch {
       if (active.current && request === generation.current) setHistoryError(true);
     }
@@ -56,10 +57,11 @@ export default function SharedPracticeEmulator({ uid, spaces, blocked, run }: { 
   return <section className="mt-4 rounded-lg bg-card p-3 text-sm">
     <h4 className="font-semibold">Shared practice · local emulator</h4>
     <p className="mt-1 text-muted-foreground">Test records are separate from existing drives. All active members of this learner’s space can see these notes.</p>
-    <label className="mt-3 block">Practice learner<select className={`${field} mt-1`} value={selected} disabled={blocked || !!pending} onChange={(event) => { setDrives([]); setSelected(event.target.value); setMessage(""); }}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.learnerName} · {item.role}</option>)}</select></label>
+    <label className="mt-3 block">Practice learner<select className={`${field} mt-1`} value={selected} disabled={blocked || !!pending} onChange={(event) => { setDrives([]); setHistoryLoaded(false); setSelected(event.target.value); setMessage(""); }}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.learnerName} · {item.role}</option>)}</select></label>
     <div className="mt-3 flex items-center gap-2"><h5 className="font-semibold">Shared practice history</h5><button type="button" className={button} disabled={blocked || !selected} onClick={() => void refreshHistory()}>Refresh practice history</button></div>
     {historyError && <p role="status">Could not load practice history. Check access and refresh.</p>}
     {more && <p>Showing the most recent 50 drives only.</p>}
+    {historyLoaded && <p className="mt-2" aria-label="Shared practice totals">{more ? "Totals for the most recent 50 drives" : "Practice totals"}: {drives.reduce((total, drive) => total + drive.minutes, 0)} minutes, including {drives.reduce((total, drive) => total + drive.nightMinutes, 0)} at night. These totals describe practice time, not driving proficiency.</p>}
     <ul aria-label="Shared practice history" className="mt-2 space-y-2">{drives.map((drive) => <li key={drive.id} className="rounded border border-border p-2"><p>{drive.date} · {drive.minutes} minutes · {drive.nightMinutes} at night</p><p>{drive.notes}</p><p className="text-muted-foreground">Recorded by account {drive.recordedByUid}; reported supervisor account {drive.supervisorPresentUid}.</p></li>)}</ul>
     {canRecord && <form className="mt-4 grid gap-2 sm:grid-cols-2" onSubmit={submit}>
       <p className="sm:col-span-2">For this test, you are recorded as the supervisor reported present. This is not independently verified.</p>

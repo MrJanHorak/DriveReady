@@ -61,10 +61,12 @@ test("a supervisor retries an uncertain save without duplication and the learner
     expect(records.docs[0].data().supervisorPresentUid).toBe(supervisor.uid);
     const learnerPage = await login(learner);
     await expect(learnerPage.getByRole("list", { name: "Shared practice history" })).toContainText("Synthetic first drive");
+    await expect(learnerPage.getByLabel("Shared practice totals")).toContainText("60 minutes, including 15 at night");
     await expect(learnerPage.getByRole("button", { name: "Save shared practice" })).toHaveCount(0);
     const managerPage = await login(manager);
     await managerPage.getByRole("combobox", { name: "Practice learner" }).selectOption({ label: "Other learner · manager" });
     await expect(managerPage.getByRole("list", { name: "Shared practice history" })).not.toContainText("Synthetic first drive");
+    await expect(managerPage.getByLabel("Shared practice totals")).toContainText("0 minutes, including 0 at night");
     await adultPage.getByLabel("Practice date").fill("2026-10-31");
     await adultPage.getByLabel("Total minutes").fill("20");
     await adultPage.route("**/v1/drives", async (route) => route.request().method() === "POST" ? route.abort("failed") : route.continue());
