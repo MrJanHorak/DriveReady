@@ -29,7 +29,8 @@ try {
     const invitation = await service.createInvitation({ idToken: accounts.manager.token, spaceId, recipientEmail: accounts[role].email, role });
     await service.acceptInvitation({ idToken: accounts[role].token, spaceId, token: invitation.token });
   }
-  await service.createDrive({ idToken: accounts.supervisor.token, spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "60", nightMinutes: "15", notes: "Fictional practice: worked on turns and intersections.", supervisorPresentUid: accounts.supervisor.uid });
+  const { routeId } = await service.createRoute({ idToken: accounts.manager.token, spaceId, operationId: randomUUID(), name: "Fictional neighborhood practice", start: "Example park", destination: "Example library" });
+  await service.createDrive({ idToken: accounts.supervisor.token, spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "60", nightMinutes: "15", notes: "Fictional practice: worked on turns and intersections.", supervisorPresentUid: accounts.supervisor.uid, routeId });
 } finally {
   await deleteApp(app);
 }

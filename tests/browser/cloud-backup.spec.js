@@ -8,7 +8,9 @@ test("cloud backup fetches the latest account records", async ({ page }) => {
   await page.getByLabel("Email", { exact: true }).fill(`backup-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
+  await page.getByRole("button", { name: "Dashboard", exact: true }).click();
   await page.getByLabel("Learner name or nickname").fill("Cloud learner");
   await page.getByRole("button", { name: "Add learner" }).click();
   await page.getByRole("button", { name: "Log a drive" }).click();
@@ -18,6 +20,7 @@ test("cloud backup fetches the latest account records", async ({ page }) => {
   await expect(page.getByText("Cloud-only note")).toBeVisible();
 
   const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("button", { name: "Download cloud backup" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("driveready-cloud-backup.json");
@@ -36,6 +39,7 @@ test("cloud backup does not download a stale copy while offline", async ({ page,
   await page.getByLabel("Email", { exact: true }).fill(`backup-offline-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
   let downloaded = false;
   page.on("download", () => { downloaded = true; });
@@ -54,6 +58,7 @@ test("a backup can be reviewed and copied to cloud without overwriting conflicts
   await page.getByLabel("Email", { exact: true }).fill(`restore-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
   const backup = { version: 1, learners: [{ id: "backup-learner", name: "Backup learner" }], drives: [{ id: "backup-drive", learnerId: "backup-learner", date: "2026-11-01", minutes: 42, nightMinutes: 0, skills: "", notes: "Backup note" }] };
   const upload = (data) => page.getByLabel("Choose backup to copy to cloud").setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(data)) });
@@ -71,6 +76,7 @@ test("a backup can be reviewed and copied to cloud without overwriting conflicts
   await upload({ ...backup, learners: [{ id: "backup-learner", name: "Different learner" }] });
   await page.getByRole("button", { name: "Copy to account" }).click();
   await expect(page.getByText(/Import finished: 0 copied, 0 already present, 2 conflicts/)).toBeVisible();
+  await page.getByRole("button", { name: "Dashboard", exact: true }).click();
   await page.getByRole("button", { name: "Refresh cloud records" }).click();
   await expect(page.getByRole("combobox", { name: "Learner" })).toHaveValue("backup-learner");
   await expect(page.getByText("Backup note")).toBeVisible();
@@ -82,6 +88,7 @@ test("invalid or oversized backup files cannot be copied to cloud", async ({ pag
   await page.getByLabel("Email", { exact: true }).fill(`bad-backup-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
   const input = page.getByLabel("Choose backup to copy to cloud");
   await input.setInputFiles({ name: "bad.json", mimeType: "application/json", buffer: Buffer.from("not json") });
@@ -98,6 +105,7 @@ test("a backup copy interrupted after one record can be retried safely", async (
   await page.getByLabel("Email", { exact: true }).fill(`backup-interrupted-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
   const backup = { version: 1, learners: [{ id: "a", name: "Backup learner" }], drives: [{ id: "d", learnerId: "a", date: "2026-11-01", minutes: 30, nightMinutes: 0, skills: "", notes: "" }] };
   const file = { name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(backup)) };

@@ -136,9 +136,6 @@ export default function FamilyWorkspace({ showAll = false, cloudUid, onSavingCha
   const drives = family.drives.filter((item) => item.learnerId === selectedId).sort((a, b) => b.date.localeCompare(a.date));
 
   return <div className="space-y-5">
-      <div className="rounded-xl border border-[#0C7A8D]/20 bg-[#E4EFF2] p-4 text-sm text-[#095969]">
-        <><strong>Cloud account.</strong> Records save to the signed-in account after the server confirms them. Refresh to see changes from another device. This development preview is for fictional data only.</>
-      </div>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {cloudLoading && <p role="status" className="text-sm text-muted-foreground">Loading cloud records…</p>}
       <div className="flex flex-wrap items-end justify-between gap-4">

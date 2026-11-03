@@ -186,29 +186,51 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     });
   }
 
-  async function createDrive({ idToken, spaceId, operationId, date, minutes, nightMinutes, notes, supervisorPresentUid }) {
+  async function createDrive({ idToken, spaceId, operationId, date, minutes, nightMinutes, notes, supervisorPresentUid, routeId = "" }) {
     const caller = await identity(idToken);
     if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || !validDate(date) ||
       typeof minutes !== "string" || !/^[1-9]\d{0,3}$/.test(minutes) || Number(minutes) > 1440 ||
       typeof nightMinutes !== "string" || !/^(0|[1-9]\d{0,3})$/.test(nightMinutes) || Number(nightMinutes) > Number(minutes) ||
-      typeof notes !== "string" || notes.length > 1000) throw new Error("Invalid drive details.");
+      typeof notes !== "string" || notes.length > 1000 || typeof routeId !== "string" || (routeId !== "" && !operationIdPattern.test(routeId))) throw new Error("Invalid drive details.");
     const presentUid = checkId(supervisorPresentUid);
     const { space, member } = refs(spaceId, caller.uid);
     const present = space.collection("members").doc(presentUid);
     const drive = space.collection("drives").doc(operationId);
     const data = { date, minutes: Number(minutes), nightMinutes: Number(nightMinutes), notes, recordedByUid: caller.uid, lastEditedByUid: caller.uid, supervisorPresentUid: presentUid };
     return db.runTransaction(async (tx) => {
-      const [spaceSnap, actorSnap, presentSnap, existing] = await tx.getAll(space, member, present, drive);
+      const route = routeId ? space.collection("routes").doc(routeId) : null;
+      const [spaceSnap, actorSnap, presentSnap, existing, routeSnap] = await tx.getAll(space, member, present, drive, ...(route ? [route] : []));
       const supervisor = (snapshot) => snapshot.exists && snapshot.data().active === true && ["manager", "supervisor"].includes(snapshot.data().role) && (snapshot.data().role !== "manager" || snapshot.id === spaceSnap.data()?.managerUid);
       if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !supervisor(actorSnap) || !supervisor(presentSnap)) throw unauthorized();
       if (existing.exists) {
         const saved = existing.data();
-        if (!Object.entries(data).every(([key, value]) => saved[key] === value)) throw new Error("Drive operation conflicts with an existing record.");
+        if (!Object.entries(data).every(([key, value]) => saved[key] === value) || (saved.routeId ?? "") !== routeId) throw new Error("Drive operation conflicts with an existing record.");
         return { driveId: drive.id, created: false };
       }
-      tx.create(drive, { ...data, createdAt: FieldValue.serverTimestamp() });
+      if (route && !routeSnap.exists) throw new Error("Route is unavailable in this space.");
+      const routeDetails = route ? { routeId, routeSnapshot: { name: routeSnap.data().name, start: routeSnap.data().start, destination: routeSnap.data().destination } } : {};
+      tx.create(drive, { ...data, ...routeDetails, createdAt: FieldValue.serverTimestamp() });
       return { driveId: drive.id, created: true };
     });
   }
-  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive };
+  async function createRoute({ idToken, spaceId, operationId, name, start, destination }) {
+    const caller = await identity(idToken);
+    const validText = (value, max) => typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\r\n\u2028\u2029]/.test(value);
+    if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || !validText(name, 80) || !validText(start, 160) || !validText(destination, 160)) throw new Error("Invalid route details.");
+    const { space, member } = refs(spaceId, caller.uid);
+    const route = space.collection("routes").doc(operationId);
+    const data = { name: name.trim(), start: start.trim(), destination: destination.trim(), createdByUid: caller.uid };
+    return db.runTransaction(async (tx) => {
+      const [spaceSnap, actorSnap, existing] = await tx.getAll(space, member, route);
+      const actor = actorSnap.data();
+      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor"].includes(actor.role) || (actor.role === "manager" && caller.uid !== spaceSnap.data().managerUid)) throw unauthorized();
+      if (existing.exists) {
+        if (!Object.entries(data).every(([key, value]) => existing.data()[key] === value)) throw new Error("Route operation conflicts with an existing record.");
+        return { routeId: route.id, created: false };
+      }
+      tx.create(route, { ...data, createdAt: FieldValue.serverTimestamp() });
+      return { routeId: route.id, created: true };
+    });
+  }
+  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute };
 }

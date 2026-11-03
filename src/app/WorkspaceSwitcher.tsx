@@ -3,8 +3,9 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "./firebaseClient";
 import FirebaseAccount from "./FirebaseAccount";
 import FamilyWorkspace from "./FamilyWorkspace";
+import { sharedAccessEmulatorEnabled } from "./sharedAccessEmulator";
 
-export default function WorkspaceSwitcher({ showAll, onBusyChange }: { showAll: boolean; onBusyChange?: (busy: boolean) => void }) {
+export default function WorkspaceSwitcher({ page, onNavigate, onBusyChange }: { page: string; onNavigate: (page: string) => void; onBusyChange?: (busy: boolean) => void }) {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(!!auth);
   const [generation, setGeneration] = useState(0);
@@ -26,10 +27,11 @@ export default function WorkspaceSwitcher({ showAll, onBusyChange }: { showAll: 
     if (!window.confirm("Refreshing closes any unsaved form. Continue?")) return;
     setGeneration((value) => value + 1);
   }
-  return <main className="flex-1 overflow-auto p-5 md:p-8"><div className="mx-auto max-w-5xl space-y-5">
+  const showPractice = page === "dashboard" || page === "logs";
+  return <main className="flex-1 overflow-auto p-5 md:p-8" style={{ display: ["routes", "requirements"].includes(page) ? "none" : undefined }}><div className="mx-auto max-w-5xl space-y-5">
     {busy && <p role="status" className="rounded-lg bg-[#E4EFF2] p-3 text-sm text-[#095969]">Cloud operation in progress. Please wait before switching sections or signing out.</p>}
-    {(!showAll || !user) && <FirebaseAccount user={user} loading={authLoading} disableSignOut={saving} onImportingChange={setImporting} />}
-    {user && <section className="rounded-xl border border-[#0C7A8D]/20 bg-card p-4"><p className="text-sm font-semibold">Practice records: Cloud account</p><p className="mt-1 text-sm text-muted-foreground">Showing records for {user.email}. Cloud saves require a connection.</p><button type="button" disabled={busy} className="mt-3 rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-50" onClick={refreshRecords}>Refresh cloud records</button></section>}
-    {user && <fieldset disabled={importing}><FamilyWorkspace key={`${user.uid}-${generation}`} showAll={showAll} cloudUid={user.uid} onSavingChange={setSaving} /></fieldset>}
+    <FirebaseAccount user={user} loading={authLoading} view={!user || page === "account" ? "account" : page === "shared" ? "shared" : "hidden"} disableSignOut={saving} onImportingChange={setImporting} />
+    {user && showPractice && <section className="rounded-xl border border-[#0C7A8D]/20 bg-card p-4"><p className="text-sm font-semibold">{sharedAccessEmulatorEnabled ? "Account-only practice" : "Practice records: Cloud account"}</p><p className="mt-1 text-sm text-muted-foreground">{sharedAccessEmulatorEnabled ? "Separate from your shared space · Fictional data only" : `${user.email} · Fictional data only · Connection required`}</p><button type="button" disabled={busy} className="mt-3 rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-50" onClick={refreshRecords}>Refresh cloud records</button>{page === "dashboard" && sharedAccessEmulatorEnabled && <button type="button" className="ml-3 text-sm text-[#0C7A8D] underline" onClick={() => onNavigate("shared")}>Open shared space</button>}</section>}
+    {user && <fieldset disabled={importing} hidden={!showPractice}><FamilyWorkspace key={`${user.uid}-${generation}`} showAll={page === "logs"} cloudUid={user.uid} onSavingChange={setSaving} /></fieldset>}
   </div></main>;
 }

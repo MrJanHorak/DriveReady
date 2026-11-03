@@ -99,6 +99,7 @@ test("an import interrupted by lost connectivity remains safe to retry", async (
   await page.getByLabel("Email", { exact: true }).fill(`import-offline-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
   let commits = 0;
   let cutConnection;

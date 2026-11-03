@@ -12,7 +12,8 @@ const routes = Object.freeze({
   "/v1/invitations/list": { action: "listInvitations", fields: ["spaceId", "cursor"] },
   "/v1/invitations/cancel-by-id": { action: "cancelInvitationById", fields: ["spaceId", "invitationId"] },
   "/v1/members/remove": { action: "removeMember", fields: ["spaceId", "memberUid"] },
-  "/v1/drives": { action: "createDrive", fields: ["spaceId", "operationId", "date", "minutes", "nightMinutes", "notes", "supervisorPresentUid"] },
+  "/v1/drives": { action: "createDrive", fields: ["spaceId", "operationId", "date", "minutes", "nightMinutes", "notes", "supervisorPresentUid"], optional: ["routeId"] },
+  "/v1/routes": { action: "createRoute", fields: ["spaceId", "operationId", "name", "start", "destination"] },
 });
 
 function readBody(req) {
@@ -65,8 +66,8 @@ export function createLocalSharedGateway({ db, auth }) {
     if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(req.headers["content-type"] ?? "")) { respond(415, failure); return; }
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { respond(400, failure); return; }
-    const { action, fields } = routes[req.url];
-    if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length !== fields.length || !fields.every((field) => Object.hasOwn(body, field) && typeof body[field] === "string")) { respond(400, failure); return; }
+    const { action, fields, optional = [] } = routes[req.url];
+    if (!body || typeof body !== "object" || Array.isArray(body) || !fields.every((field) => Object.hasOwn(body, field) && typeof body[field] === "string") || !Object.keys(body).every((field) => [...fields, ...optional].includes(field) && typeof body[field] === "string")) { respond(400, failure); return; }
     try {
       const result = await service[action]({ ...body, idToken: match[1] });
       respond(200, result ?? { ok: true });

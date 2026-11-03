@@ -8,7 +8,7 @@ import { sharedAccessEmulatorEnabled } from "./sharedAccessEmulator";
 const input = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm";
 const button = "rounded-lg bg-[#0C7A8D] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
 
-export default function FirebaseAccount({ user, loading, disableSignOut = false, onImportingChange }: { user: User | null; loading: boolean; disableSignOut?: boolean; onImportingChange?: (busy: boolean) => void }) {
+export default function FirebaseAccount({ user, loading, view, disableSignOut = false, onImportingChange }: { user: User | null; loading: boolean; view: "account" | "shared" | "hidden"; disableSignOut?: boolean; onImportingChange?: (busy: boolean) => void }) {
   const [emailVerified, setEmailVerified] = useState(false);
   const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -17,6 +17,7 @@ export default function FirebaseAccount({ user, loading, disableSignOut = false,
   const sharedBusyRef = useRef(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
   const onSharedBusyChange = useCallback((value: boolean) => { sharedBusyRef.current = value; setSharedBusy(value); onImportingChange?.(value || cloudBusyRef.current); }, [onImportingChange]);
@@ -29,8 +30,14 @@ export default function FirebaseAccount({ user, loading, disableSignOut = false,
     try {
       if (creating) await createUserWithEmailAndPassword(activeAuth, email.trim(), password);
       else await signInWithEmailAndPassword(activeAuth, email.trim(), password);
-      setPassword("");
-    } catch { setMessage("Unable to sign in or create the account. Check your details and Firebase configuration, then try again."); }
+      setPassword(""); setShowPassword(false);
+    } catch (error) {
+      if ((error as { code?: string })?.code === "auth/network-request-failed") {
+        setMessage(sharedAccessEmulatorEnabled ? "Cannot reach the local sign-in emulator. Make sure the demo is still running, then try again." : "Cannot reach the sign-in service. Check your connection and try again.");
+      } else if (!sharedAccessEmulatorEnabled && ["manager@example.test", "supervisor@example.test", "learner@example.test"].includes(email.trim().toLowerCase())) {
+        setMessage("These fictional accounts are available only in the shared local demo. Start npm run demo:shared and open http://127.0.0.1:4173/.");
+      } else setMessage("Unable to sign in or create the account. Check your email and password, then try again.");
+    }
     finally { setBusy(false); }
   }
   async function resetPassword() {
@@ -59,16 +66,16 @@ export default function FirebaseAccount({ user, loading, disableSignOut = false,
     } catch { setMessage("Could not refresh email verification. Check your connection and try again."); }
     finally { setBusy(false); }
   }
-  return <section className="rounded-2xl border border-border bg-card p-5">
+  return <><section hidden={view !== "account"} className="rounded-2xl border border-border bg-card p-5">
     <h2 className="font-semibold">Supervisor account <span className="text-xs font-normal text-muted-foreground">(early setup)</span></h2>
-    <p className="mt-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><strong>Development preview:</strong> Use fictional names, notes, and locations only. This cloud service is not ready for real family data.</p>
+    <p className="mt-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><strong>Development preview:</strong> Use fictional names, notes, and locations only. This preview is not ready for real family data.</p>
+    {sharedAccessEmulatorEnabled ? <p className="mt-2 rounded-lg bg-[#E4EFF2] p-3 text-sm"><strong>Shared local demo.</strong> Sign in with manager@example.test, supervisor@example.test, or learner@example.test. The password is fictional-drive-123. The demo resets when stopped.</p> : <p className="mt-2 text-sm text-muted-foreground">The shared demo accounts in the README work only in the local demo started with <code>npm run demo:shared</code> at http://127.0.0.1:4173/.</p>}
     <p className="mt-1 text-sm text-muted-foreground">Sign in to see and save practice records for your account.</p>
     {loading ? <p className="mt-3 text-sm">Checking account…</p> : user ? <>
       <div className="mt-3 flex flex-wrap items-center gap-3 text-sm"><span>Signed in as {user.email}</span><button disabled={busy || importing || sharedBusy || disableSignOut} className="rounded-lg border border-border px-3 py-2 disabled:opacity-50" onClick={async () => { try { await signOut(activeAuth); setMessage(""); setCreating(false); } catch { setMessage("Could not sign out. Please try again."); } }}>Sign out</button></div>
       <div className="mt-3 text-sm">{emailVerified ? <p>Email verified</p> : <><p>Email not verified. Verification will be required for future shared-space invitations.</p><div className="mt-2 flex flex-wrap gap-3"><button type="button" className="text-[#0C7A8D] underline disabled:opacity-50" disabled={busy || importing || sharedBusy || disableSignOut} onClick={sendVerification}>Send verification email</button><button type="button" className="text-[#0C7A8D] underline disabled:opacity-50" disabled={busy || importing || sharedBusy || disableSignOut} onClick={refreshVerification}>Refresh verification status</button></div></>}</div>
       <CloudFamily key={user.uid} uid={user.uid} disabled={disableSignOut || sharedBusy || busy} onBusyChange={onCloudBusyChange} />
-      {sharedAccessEmulatorEnabled && <SharedSpacesEmulator key={user.uid} uid={user.uid} verified={emailVerified} disabled={disableSignOut || importing || busy} onBusyChange={onSharedBusyChange} />}
-    </> : <form onSubmit={submit} className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium">Email<input className={`${input} mt-1`} type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label><label className="text-sm font-medium">Password<input className={`${input} mt-1`} type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={creating ? "new-password" : "current-password"} required /></label><div className="flex flex-wrap gap-3 sm:col-span-2"><button className={button} disabled={busy}>{creating ? "Create account" : "Sign in"}</button><button type="button" className="text-sm text-[#0C7A8D] underline disabled:opacity-50" disabled={busy} onClick={() => { setCreating(!creating); setMessage(""); setPassword(""); }}>{creating ? "Use an existing account" : "Create an account"}</button>{!creating && <button type="button" className="text-sm text-[#0C7A8D] underline" disabled={busy} onClick={resetPassword}>Forgot password?</button>}</div></form>}
+    </> : <form onSubmit={submit} className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium">Email<input className={`${input} mt-1`} type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label><div><label className="text-sm font-medium">Password<input className={`${input} mt-1`} type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={creating ? "new-password" : "current-password"} required /></label><button type="button" className="mt-1 text-sm text-[#0C7A8D] underline" aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? "Hide password" : "Show password"}</button></div><div className="flex flex-wrap gap-3 sm:col-span-2"><button className={button} disabled={busy}>{creating ? "Create account" : "Sign in"}</button><button type="button" className="text-sm text-[#0C7A8D] underline disabled:opacity-50" disabled={busy} onClick={() => { setCreating(!creating); setMessage(""); setPassword(""); setShowPassword(false); }}>{creating ? "Use an existing account" : "Create an account"}</button>{!creating && <button type="button" className="text-sm text-[#0C7A8D] underline" disabled={busy} onClick={resetPassword}>Forgot password?</button>}</div></form>}
     {message && <p role="status" className="mt-3 text-sm text-muted-foreground">{message}</p>}
-  </section>;
+  </section>{user && sharedAccessEmulatorEnabled && <div hidden={view !== "shared"}><SharedSpacesEmulator key={user.uid} uid={user.uid} verified={emailVerified} disabled={disableSignOut || importing || busy} onBusyChange={onSharedBusyChange} /></div>}</>;
 }

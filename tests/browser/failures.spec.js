@@ -14,7 +14,7 @@ test("two browsers report a stale edit and preserve the saved version", async ({
     await first.getByLabel("Email", { exact: true }).fill(email);
     await first.getByLabel("Password", { exact: true }).fill(password);
     await first.getByRole("button", { name: "Create account", exact: true }).click();
-    await expect(first.getByText(`Signed in as ${email}`)).toBeVisible();
+    await expect(first.getByText("Practice records: Cloud account")).toBeVisible();
     await first.getByLabel("Learner name or nickname").fill("Cloud learner");
     await first.getByRole("button", { name: "Add learner" }).click();
     await first.getByRole("button", { name: "Log a drive" }).click();
@@ -26,7 +26,7 @@ test("two browsers report a stale edit and preserve the saved version", async ({
     await second.getByLabel("Email", { exact: true }).fill(email);
     await second.getByLabel("Password", { exact: true }).fill(password);
     await second.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(second.getByText(`Signed in as ${email}`)).toBeVisible();
+    await expect(second.getByText("Practice records: Cloud account")).toBeVisible();
     await expect(second.getByText("30m", { exact: false }).first()).toBeVisible();
     await second.getByRole("button", { name: "Edit", exact: true }).click();
     await second.getByLabel("Total duration (minutes)").fill("60");
@@ -50,6 +50,7 @@ test("interrupted backup import can be retried", async ({ page }) => {
   await page.getByLabel("Email", { exact: true }).fill(`interrupt-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
   let commits = 0;
   let release;
@@ -68,9 +69,7 @@ test("interrupted backup import can be retried", async ({ page }) => {
   await page.getByRole("button", { name: "Copy to account" }).click();
   await pending;
   await expect(page.getByRole("button", { name: "Sign out" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Refresh cloud records" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Driving Logs" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Add learner" })).toBeDisabled();
   release();
   await expect(page.getByText("Import was interrupted.", { exact: false })).toBeVisible();
   expect(commits).toBe(2);
@@ -103,10 +102,9 @@ test("a pending cloud save blocks sign-out and a rejected save keeps the form", 
   });
   await page.getByRole("button", { name: "Save drive" }).click();
   await pending;
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Refresh cloud records" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Driving Logs" })).toBeDisabled();
-  await expect(page.getByLabel("Choose backup to copy to cloud")).toBeDisabled();
   release();
   await expect(page.getByRole("alert")).toContainText("Could not confirm the cloud save");
   await expect(page.getByLabel("Total duration (minutes)")).toHaveValue("30");
@@ -126,6 +124,7 @@ test("an incompatible backup identifies the field before any copy", async ({ pag
   await page.getByLabel("Email", { exact: true }).fill(`invalid-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
   await page.getByLabel("Choose backup to copy to cloud").setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(family)) });
   await expect(page.getByText(/Drive 1: route link must use HTTPS/)).toBeVisible();

@@ -5,6 +5,7 @@ test("sign-in shows account records and sign-out hides both account and older br
   await page.addInitScript((data) => { if (!localStorage.getItem("driveready.family.v1")) localStorage.setItem("driveready.family.v1", JSON.stringify(data)); }, local);
   const email = `browser-${Date.now()}@example.test`, password = "test-password-123";
   await page.goto("/");
+  await expect(page.getByText("The shared demo accounts in the README", { exact: false })).toBeVisible();
   await expect(page.getByText("Old browser learner")).toHaveCount(0);
   await expect(page.getByText("Old browser note")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Shared spaces · local emulator only" })).toHaveCount(0);
@@ -26,6 +27,7 @@ test("sign-in shows account records and sign-out hides both account and older br
   await page.getByLabel("Notes").fill("Cloud private note");
   await page.getByRole("button", { name: "Save drive" }).click();
   await expect(page.getByText("Cloud private note")).toBeVisible();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   await expect(page.getByText("Cloud private note")).toHaveCount(0);
@@ -38,13 +40,16 @@ test("sign-in shows account records and sign-out hides both account and older br
   await page.getByLabel("Email", { exact: true }).fill(`other-${Date.now()}@example.test`);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByText("This account has 0 learners and 0 drives")).toBeVisible();
   await expect(page.getByText("Cloud private note")).toHaveCount(0);
   await expect(page.getByText("Old browser note")).toHaveCount(0);
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "Dashboard", exact: true }).click();
   await expect(page.getByText("Cloud private note")).toBeVisible();
   await expect(page.getByText("Old browser note")).toHaveCount(0);
 });

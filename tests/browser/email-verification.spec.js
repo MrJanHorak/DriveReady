@@ -9,6 +9,7 @@ test("verification is requested explicitly and the status can be refreshed", asy
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByText("Email not verified.", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Refresh verification status" }).click();
   await expect(page.getByText("Email not verified yet.", { exact: false })).toBeVisible();

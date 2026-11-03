@@ -18,10 +18,15 @@ test("manager, invited supervisor and learner can join only the intended space",
       contexts.push(context);
       const page = await context.newPage();
       await page.goto("http://127.0.0.1:4173/");
+      await expect(page.getByText("Shared local demo.", { exact: false })).toBeVisible();
       await page.getByLabel("Email", { exact: true }).fill(email);
       await page.getByLabel("Password", { exact: true }).fill(password);
+      await page.getByRole("button", { name: "Show password" }).click();
+      await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("type", "text");
+      await page.getByRole("button", { name: "Hide password" }).click();
+      await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("type", "password");
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
-      await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
+      await page.getByRole("button", { name: "Shared space", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Shared spaces · local emulator only" })).toBeVisible();
       return page;
     }
@@ -123,6 +128,7 @@ test("pending shared and existing cloud operations block conflicting actions", a
     await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByRole("button", { name: "Shared space", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Shared spaces · local emulator only" })).toBeVisible();
     let reached;
     let pending = new Promise((resolve) => { reached = resolve; });
@@ -134,13 +140,12 @@ test("pending shared and existing cloud operations block conflicting actions", a
     await page.getByLabel("Learner name for shared space").fill("Shared learner");
     await page.getByRole("button", { name: "Create shared space" }).click();
     await pending;
-    await expect(page.getByRole("button", { name: "Sign out" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Account", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Route Explorer" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Refresh cloud records" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Download cloud backup" })).toBeDisabled();
     release();
     await expect(page.getByText("Learner space created.")).toBeVisible();
     await page.unroute("**/v1/spaces");
+    await page.getByRole("button", { name: "Account", exact: true }).click();
     const backup = { version: 1, learners: [{ id: "busy-learner", name: "Backup learner" }], drives: [] };
     await page.getByLabel("Choose backup to copy to cloud").setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(backup)) });
     pending = new Promise((resolve) => { reached = resolve; });
@@ -150,8 +155,7 @@ test("pending shared and existing cloud operations block conflicting actions", a
     await pending;
     await expect(page.getByRole("button", { name: "Sign out" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Route Explorer" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Refresh cloud records" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Create shared space" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Shared space", exact: true })).toBeDisabled();
     release();
     await expect(page.getByText(/Import finished: 1 copied/)).toBeVisible();
   } finally {
@@ -180,6 +184,7 @@ test("manager can load another page of invitations", async ({ browser }) => {
     await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByRole("button", { name: "Shared space", exact: true }).click();
     const list = page.getByRole("list", { name: "Pending invitations" });
     await expect(list.getByRole("listitem")).toHaveCount(25);
     await page.getByRole("button", { name: "Load more invitations" }).click();

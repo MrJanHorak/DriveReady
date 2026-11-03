@@ -215,3 +215,53 @@ test("shared drives require active supervisors, preserve attribution and reject 
   await assert.rejects(service.createDrive({ ...input, operationId: randomUUID(), supervisorPresentUid: adult.uid, idToken: manager.token }), /Not authorized/);
   assert.equal((await getDocFromServer(doc(learner.db, `spaces/${spaceId}/drives/${input.operationId}`))).data().recordedByUid, adult.uid);
 });
+
+test("shared routes are private, supervisor-created and retryable", async () => {
+  const manager = await account("manager-route"), adult = await account("adult-route"), learner = await account("learner-route"), outsider = await account("outsider-route");
+  const { spaceId } = await service.createSpace({ idToken: manager.token, learnerName: "Route learner" });
+  const sibling = await service.createSpace({ idToken: manager.token, learnerName: "Other route learner" });
+  for (const [person, role] of [[adult, "supervisor"], [learner, "learner"]]) {
+    const invite = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: person.email, role });
+    await service.acceptInvitation({ idToken: person.token, spaceId, token: invite.token });
+  }
+  const input = { spaceId, operationId: randomUUID(), name: "Fictional route", start: "Example start", destination: "Example destination" };
+  await assert.rejects(service.createRoute({ ...input, idToken: learner.token }), /Not authorized/);
+  await assert.rejects(service.createRoute({ ...input, idToken: outsider.token }), /Not authorized/);
+  await assert.rejects(service.createRoute({ ...input, idToken: adult.token, spaceId: sibling.spaceId }), /Not authorized/);
+  for (const changes of [{ name: "  " }, { start: "x".repeat(161) }, { destination: "line\nbreak" }, { operationId: "bad/id" }]) await assert.rejects(service.createRoute({ ...input, ...changes, idToken: adult.token }), /Invalid route details/);
+  const attempts = await Promise.all([service.createRoute({ ...input, idToken: adult.token }), service.createRoute({ ...input, idToken: adult.token })]);
+  assert.deepEqual(attempts.map((item) => item.created).sort(), [false, true]);
+  assert.equal((await getDocFromServer(doc(learner.db, `spaces/${spaceId}/routes/${input.operationId}`))).data().name, input.name);
+  await assert.rejects(service.createRoute({ ...input, idToken: adult.token, name: "Changed" }), /conflicts/);
+  await assert.rejects(getDocFromServer(doc(outsider.db, `spaces/${spaceId}/routes/${input.operationId}`)), /permission/i);
+  await assert.rejects(getDocFromServer(doc(learner.db, `spaces/${sibling.spaceId}/routes/${input.operationId}`)), /permission/i);
+  await assert.rejects(setDoc(doc(adult.db, `spaces/${spaceId}/routes/forged`), { name: "Forged" }), /permission/i);
+  await service.removeMember({ idToken: manager.token, spaceId, memberUid: adult.uid });
+  await assert.rejects(service.createRoute({ ...input, idToken: adult.token }), /Not authorized/);
+});
+
+test("a shared drive can reference only a route in the same space and preserves its description", async () => {
+  const manager = await account("manager-drive-route"), learner = await account("learner-drive-route");
+  const { spaceId } = await service.createSpace({ idToken: manager.token, learnerName: "Route and drive learner" });
+  const other = await service.createSpace({ idToken: manager.token, learnerName: "Other space" });
+  const invite = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: learner.email, role: "learner" });
+  await service.acceptInvitation({ idToken: learner.token, spaceId, token: invite.token });
+  const makeRoute = (space) => service.createRoute({ idToken: manager.token, spaceId: space, operationId: randomUUID(), name: "Original name", start: "Example start", destination: "Example destination" });
+  const route = await makeRoute(spaceId), otherRoute = await makeRoute(other.spaceId);
+  const drive = { idToken: manager.token, spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "30", nightMinutes: "5", notes: "Fictional notes", supervisorPresentUid: manager.uid, routeId: route.routeId };
+  await assert.rejects(service.createDrive({ ...drive, routeId: "bad/id" }), /Invalid drive details/);
+  await assert.rejects(service.createDrive({ ...drive, routeId: otherRoute.routeId }), /Route is unavailable/);
+  await assert.rejects(service.createDrive({ ...drive, routeId: randomUUID() }), /Route is unavailable/);
+  await assert.rejects(service.createDrive({ ...drive, idToken: learner.token }), /Not authorized/);
+  assert.equal((await service.createDrive(drive)).created, true);
+  await db.doc(`spaces/${spaceId}/routes/${route.routeId}`).update({ name: "Changed later" });
+  assert.equal((await service.createDrive(drive)).created, false);
+  await assert.rejects(service.createDrive({ ...drive, routeId: "" }), /conflicts/);
+  const saved = (await getDocFromServer(doc(learner.db, `spaces/${spaceId}/drives/${drive.operationId}`))).data();
+  assert.equal(saved.routeId, route.routeId);
+  assert.deepEqual(saved.routeSnapshot, { name: "Original name", start: "Example start", destination: "Example destination" });
+  const legacy = { ...drive, operationId: randomUUID() };
+  delete legacy.routeId;
+  assert.equal((await service.createDrive(legacy)).created, true);
+  assert.equal((await service.createDrive({ ...legacy, routeId: "" })).created, false);
+});

@@ -18,7 +18,7 @@ For the Firebase emulator browser tests, install the Firebase CLI and Java 21 or
 
 ## Try the shared family prototype
 
-Install the project dependencies, Firebase CLI, and Java 21 or newer, then run `npm run demo:shared` from this directory. Open [http://127.0.0.1:4173/](http://127.0.0.1:4173/) and sign in using any of these fictional, already verified accounts:
+Install the project dependencies, Firebase CLI, and Java 21 or newer, then run `npm run demo:shared` from this directory. Keep that terminal open. Once it says Vite is ready, open [http://127.0.0.1:4173/](http://127.0.0.1:4173/). The sign-in panel should say **Shared local demo**. The ordinary `npm run dev` server uses a different account store, so these demo accounts will not work there. Sign in using any of these fictional, already verified accounts:
 
 | Role | Email | Password |
 | --- | --- | --- |
@@ -26,9 +26,11 @@ Install the project dependencies, Firebase CLI, and Java 21 or newer, then run `
 | Invited supervisor | `supervisor@example.test` | `fictional-drive-123` |
 | Learner | `learner@example.test` | `fictional-drive-123` |
 
-In the account panel, find **Shared spaces · local emulator only**. All three accounts have access to Alex Example's space and a fictional drive. As a supervisor, add practice; sign out and sign in as the learner to see the shared notes and totals. The manager can create another space, issue an invitation, and manually copy its space ID and token to the invited account; no email is sent. Use separate browser profiles or sign out between accounts. The account-scoped workspace is separate from shared practice.
+Use **Show password** to check the password as you type. If sign-in fails, confirm the terminal is still running and the page says **Shared local demo**, then check the email and password. Reload the demo address after restarting the command.
 
-Use fictional data only. The command starts local Auth and Firestore emulators, the local shared gateway, and Vite; it does not connect to the development Firebase project. Ports 4000, 4173, 4175, 8080, and 9099 must be free. Press Ctrl+C to stop. Emulator data is temporary and is recreated on each run. The shared prototype is not production-ready: shared routes, drive editing, migration, recovery, and deployment are not implemented, and practice totals cover at most the 50 displayed drives.
+After signing in, select **Shared space** in the side menu. All three accounts have access to Alex Example's space, a fictional drive, and a route description. As a supervisor, add practice or a route; use **Account** to sign out, then sign in as the learner to see shared notes, totals, and routes. The manager can create another space, issue an invitation, and manually copy its space ID and token to the invited account; no email is sent. Use separate browser profiles or sign out between accounts. The account-scoped workspace is separate from shared practice.
+
+Use fictional data only. The command starts local Auth and Firestore emulators, the local shared gateway, and Vite; it does not connect to the development Firebase project. Ports 4000, 4173, 4175, 8080, and 9099 must be free. Press Ctrl+C to stop. Emulator data is temporary and is recreated on each run. Load older drives to include them in the displayed totals; refresh the history to pick up concurrent changes. Shared routes are text descriptions, not mapped paths, and only the first 50 by name can be displayed or selected for practice. Refresh routes in the practice form after creating one. A linked drive keeps a snapshot of the route description from when it was logged. Drive editing, migration, recovery, and deployment are not implemented.
 
 ## Current state
 

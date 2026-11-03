@@ -7,8 +7,8 @@ export default function PracticeCoverage({ drives, learnerId }: { drives: Drive[
     { title: "Skills", choices: PRACTICE_SKILLS, field: "practicedSkills" },
     { title: "Roads and conditions", choices: PRACTICE_CONDITIONS, field: "practicedConditions" },
   ];
-  return <section className="rounded-2xl border border-border bg-card p-5">
-    <h3 className="font-semibold">Practice coverage</h3>
+  return <details className="rounded-2xl border border-border bg-card p-5">
+    <summary className="cursor-pointer font-semibold">Practice coverage</summary>
     <p className="mt-1 text-sm text-muted-foreground">See what you’ve recorded and what you may want to explore. A record shows exposure, not mastery or readiness. Older free-text entries are not counted until you edit and select their tags.</p>
     <div className="mt-4 grid gap-5 md:grid-cols-2">{groups.map((group) => <div key={group.title}>
       <h4 className="text-sm font-semibold">{group.title}</h4>
@@ -16,7 +16,7 @@ export default function PracticeCoverage({ drives, learnerId }: { drives: Drive[
         <span>{item.label}</span><span className="text-right text-xs text-muted-foreground">{item.count ? `${item.count} ${item.count === 1 ? "drive" : "drives"} · last ${item.lastDate}` : "Not recorded yet"}</span>
       </li>)}</ul>
     </div>)}</div>
-  </section>;
+  </details>;
 }
 
 export function PracticeChoices({ legend, choices, selected, onChange }: { legend: string; choices: string[]; selected: string[]; onChange: (items: string[]) => void }) {

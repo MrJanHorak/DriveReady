@@ -9,12 +9,12 @@ export default defineConfig({
     {
       command: "node server/startLocalSharedGateway.mjs",
       url: "http://127.0.0.1:4175/health",
-      reuseExistingServer: false,
+      reuseExistingServer: process.env.DRIVEREADY_REUSE_DEMO === "true",
     },
     {
       command: "npm run dev -- --host 127.0.0.1 --port 4173 --strictPort",
       url: "http://127.0.0.1:4173",
-      reuseExistingServer: false,
+      reuseExistingServer: process.env.DRIVEREADY_REUSE_DEMO === "true",
       env: {
         VITE_FIREBASE_API_KEY: "demo-key",
         VITE_FIREBASE_AUTH_DOMAIN: "demo-driveready.firebaseapp.com",
