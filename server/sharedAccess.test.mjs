@@ -265,3 +265,40 @@ test("a shared drive can reference only a route in the same space and preserves 
   assert.equal((await service.createDrive(legacy)).created, true);
   assert.equal((await service.createDrive({ ...legacy, routeId: "" })).created, false);
 });
+
+test("shared drive edits enforce roles, preserve attribution, reject stale changes and retry safely", async () => {
+  const suffix = randomUUID();
+  const manager = await account(`manager-edit-${suffix}`), author = await account(`author-edit-${suffix}`), other = await account(`other-edit-${suffix}`), learner = await account(`learner-edit-${suffix}`), outsider = await account(`outsider-edit-${suffix}`);
+  const { spaceId } = await service.createSpace({ idToken: manager.token, learnerName: "Edit learner" });
+  for (const [person, role] of [[author, "supervisor"], [other, "supervisor"], [learner, "learner"]]) {
+    const invite = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: person.email, role });
+    await service.acceptInvitation({ idToken: person.token, spaceId, token: invite.token });
+  }
+  const route = await service.createRoute({ idToken: manager.token, spaceId, operationId: randomUUID(), name: "Original route", start: "Fictional start", destination: "Fictional end" });
+  const create = { idToken: author.token, spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "60", nightMinutes: "15", notes: "Original", supervisorPresentUid: manager.uid, routeId: route.routeId };
+  await service.createDrive(create);
+  const edit = { idToken: author.token, spaceId, driveId: create.operationId, operationId: randomUUID(), expectedRevision: "0", date: "2026-10-31", minutes: "45", nightMinutes: "10", notes: "Corrected" };
+  for (const person of [learner, other, outsider]) await assert.rejects(service.editDrive({ ...edit, idToken: person.token }), /Not authorized/);
+  for (const changes of [{ expectedRevision: "-1" }, { date: "2026-02-30" }, { minutes: "0" }, { nightMinutes: "46" }, { notes: "x".repeat(1001) }]) await assert.rejects(service.editDrive({ ...edit, ...changes }), /Invalid drive details/);
+  const competing = { ...edit, idToken: manager.token, operationId: randomUUID(), notes: "Manager correction" };
+  const race = await Promise.allSettled([service.editDrive(edit), service.editDrive(competing)]);
+  assert.equal(race.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(race.filter((result) => result.status === "rejected").length, 1);
+  const winner = race[0].status === "fulfilled" ? edit : competing;
+  assert.equal((await service.editDrive(winner)).updated, false);
+  await assert.rejects(service.editDrive({ ...winner, notes: "Changed retry" }), /conflicts/);
+  const saved = (await getDocFromServer(doc(learner.db, `spaces/${spaceId}/drives/${create.operationId}`))).data();
+  assert.equal(saved.recordedByUid, author.uid);
+  assert.equal(saved.lastEditedByUid, winner.idToken === author.token ? author.uid : manager.uid);
+  assert.equal(saved.supervisorPresentUid, manager.uid);
+  assert.equal(saved.routeSnapshot.name, "Original route");
+  assert.equal(saved.revision, 1);
+  assert.equal(saved.notes, winner.notes);
+  await assert.rejects(getDocFromServer(doc(learner.db, `spaces/${spaceId}/driveEditOperations/${winner.operationId}`)), /permission/i);
+  await assert.rejects(setDoc(doc(author.db, `spaces/${spaceId}/drives/${create.operationId}`), { notes: "forged" }), /permission/i);
+  await service.removeMember({ idToken: manager.token, spaceId, memberUid: author.uid });
+  await assert.rejects(service.editDrive({ ...edit, expectedRevision: "1", operationId: randomUUID() }), /Not authorized/);
+  const later = { ...edit, idToken: manager.token, expectedRevision: "1", operationId: randomUUID(), notes: "Manager after removal" };
+  assert.equal((await service.editDrive(later)).updated, true);
+  assert.equal((await service.editDrive(competing.idToken === winner.idToken ? winner : later)).updated, false);
+});

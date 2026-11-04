@@ -5,8 +5,10 @@ import SharedRouteCard from "./SharedRouteCard";
 
 type Space = { id: string; learnerName: string; role: string };
 type Route = { id: string; name: string; start: string; destination: string };
-type Drive = { id: string; date: string; minutes: number; nightMinutes: number; notes: string; recordedByUid: string; supervisorPresentUid: string; routeId?: string; routeSnapshot?: { name: string; start: string; destination: string } };
-type Pending = { spaceId: string; operationId: string; date: string; minutes: string; nightMinutes: string; notes: string; supervisorPresentUid: string; routeId: string };
+type Drive = { id: string; date: string; minutes: number; nightMinutes: number; notes: string; recordedByUid: string; lastEditedByUid?: string; supervisorPresentUid: string; revision?: number; routeId?: string; routeSnapshot?: { name: string; start: string; destination: string } };
+type CreateBody = { spaceId: string; operationId: string; date: string; minutes: string; nightMinutes: string; notes: string; supervisorPresentUid: string; routeId: string };
+type EditBody = { spaceId: string; driveId: string; operationId: string; expectedRevision: string; date: string; minutes: string; nightMinutes: string; notes: string };
+type Pending = { action: "createDrive"; body: CreateBody } | { action: "editDrive"; body: EditBody };
 const field = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm";
 const button = "rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50";
 
@@ -22,6 +24,8 @@ export default function SharedPracticeEmulator({ uid, spaces, blocked, run }: { 
   const [minutes, setMinutes] = useState("");
   const [nightMinutes, setNightMinutes] = useState("0");
   const [notes, setNotes] = useState("");
+  const [editing, setEditing] = useState<Drive | null>(null);
+  const dateInput = useRef<HTMLInputElement>(null);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [routeId, setRouteId] = useState("");
   const routeIdRef = useRef(routeId);
@@ -39,9 +43,16 @@ export default function SharedPracticeEmulator({ uid, spaces, blocked, run }: { 
   const generation = useRef(0);
   const active = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; generation.current += 1; routeGeneration.current += 1; }; }, []);
+  useEffect(() => { if (editing) dateInput.current?.focus(); }, [editing]);
   useEffect(() => {
     setSelected((current) => spaces.some((space) => space.id === current) ? current : (pendingRef.current ? "" : spaces[0]?.id ?? ""));
   }, [spaces]);
+  useEffect(() => {
+    if (!selected || spaces.some((space) => space.id === selected)) return;
+    generation.current += 1; routeGeneration.current += 1;
+    setDrives([]); setCursor(null); setHistoryLoaded(false); setRoutes([]); setRouteCursor(null);
+    if (!pendingRef.current) { setEditing(null); setDate(""); setMinutes(""); setNightMinutes("0"); setNotes(""); setRouteId(""); }
+  }, [spaces, selected]);
   const refreshHistory = useCallback(async () => {
     const request = ++generation.current;
     setDrives([]); setCursor(null); setHistoryError(false); setHistoryLoaded(false); loadingMoreRef.current = false; setLoadingMore(false);
@@ -100,38 +111,44 @@ export default function SharedPracticeEmulator({ uid, spaces, blocked, run }: { 
   }
   const space = spaces.find((item) => item.id === selected);
   const canRecord = space && ["manager", "supervisor"].includes(space.role);
+  function resetForm() { setEditing(null); setDate(""); setMinutes(""); setNightMinutes("0"); setNotes(""); setRouteId(""); }
+  function startEdit(drive: Drive) {
+    if (blocked || pending || !canRecord) return;
+    if ((date || minutes || notes || routeId) && !window.confirm("Replace the current unsaved practice form?")) return;
+    setEditing(drive); setDate(drive.date); setMinutes(String(drive.minutes)); setNightMinutes(String(drive.nightMinutes)); setNotes(drive.notes); setMessage("");
+  }
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (blocked || !selected || !canRecord) return;
-    const draft = pendingRef.current ?? { spaceId: selected, operationId: crypto.randomUUID(), date, minutes, nightMinutes, notes, supervisorPresentUid: uid, routeId };
+    const draft: Pending = pendingRef.current ?? (editing ? { action: "editDrive", body: { spaceId: selected, driveId: editing.id, operationId: crypto.randomUUID(), expectedRevision: String(editing.revision ?? 0), date, minutes, nightMinutes, notes } } : { action: "createDrive", body: { spaceId: selected, operationId: crypto.randomUUID(), date, minutes, nightMinutes, notes, supervisorPresentUid: uid, routeId } });
     pendingRef.current = draft; setPending(draft); setMessage(""); setDiscarding(false);
     void run(async () => {
-      await sharedAccessRequest(uid, "createDrive", draft);
-      pendingRef.current = null; setPending(null); setDate(""); setMinutes(""); setNightMinutes("0"); setNotes(""); setRouteId("");
+      await sharedAccessRequest(uid, draft.action, draft.body);
+      pendingRef.current = null; setPending(null); resetForm();
       await refreshHistory();
-      if (active.current) setMessage("Practice drive saved.");
+      if (active.current) setMessage(draft.action === "editDrive" ? "Practice changes saved." : "Practice drive saved.");
     });
   }
   if (!spaces.length && !pending) return null;
   return <section className="mt-4 rounded-lg bg-card p-3 text-sm">
     <h4 className="font-semibold">Shared practice · local emulator</h4>
     <p className="mt-1 text-muted-foreground">Test records are separate from existing drives. All active members of this learner’s space can see these notes.</p>
-    <label className="mt-3 block">Practice learner<select className={`${field} mt-1`} value={selected} disabled={blocked || !!pending} onChange={(event) => { if (event.target.value === selected) return; generation.current += 1; routeGeneration.current += 1; setDrives([]); setCursor(null); setHistoryLoaded(false); setRoutes([]); setRouteCursor(null); setRouteId(""); setRouteNotice(""); setSelected(event.target.value); setMessage(""); }}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.learnerName} · {item.role}</option>)}</select></label>
+    <label className="mt-3 block">Practice learner<select className={`${field} mt-1`} value={selected} disabled={blocked || !!pending} onChange={(event) => { if (event.target.value === selected) return; if ((date || minutes || notes || routeId) && !window.confirm("Discard the current unsaved practice form and switch learners?")) return; generation.current += 1; routeGeneration.current += 1; setDrives([]); setCursor(null); setHistoryLoaded(false); setRoutes([]); setRouteCursor(null); resetForm(); setRouteNotice(""); setSelected(event.target.value); setMessage(""); }}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.learnerName} · {item.role}</option>)}</select></label>
     <div className="mt-3 flex items-center gap-2"><h5 className="font-semibold">Shared practice history</h5><button type="button" className={button} disabled={blocked || !selected} onClick={() => void refreshHistory()}>Refresh practice history</button></div>
     {historyError && <p role="status">Could not load practice history. Check access and refresh.</p>}
-    {historyLoaded && <p className="mt-2" aria-label="Shared practice totals">{cursor ? "Totals for loaded drives" : "Practice totals"}: {drives.reduce((total, drive) => total + drive.minutes, 0)} minutes, including {drives.reduce((total, drive) => total + drive.nightMinutes, 0)} at night. These totals describe practice time, not driving proficiency.</p>}
+    {space && historyLoaded && <p className="mt-2" aria-label="Shared practice totals">{cursor ? "Totals for loaded drives" : "Practice totals"}: {drives.reduce((total, drive) => total + drive.minutes, 0)} minutes, including {drives.reduce((total, drive) => total + drive.nightMinutes, 0)} at night. These totals describe practice time, not driving proficiency.</p>}
     {cursor && <p>More drives are available. Totals include only loaded drives. Refresh to pick up changes made while browsing.</p>}
-    <ul aria-label="Shared practice history" className="mt-2 space-y-2">{drives.map((drive) => <li key={`${selected}-${drive.id}`} className="space-y-2 rounded border border-border p-3"><p>{drive.date} · {drive.minutes} minutes · {drive.nightMinutes} at night</p>{drive.routeSnapshot && <SharedRouteCard route={drive.routeSnapshot} recorded uid={uid} spaceId={selected} routeId={drive.routeId} />}<p>{drive.notes}</p><p className="text-muted-foreground">Recorded by account {drive.recordedByUid}; reported supervisor account {drive.supervisorPresentUid}.</p></li>)}</ul>
+    <ul aria-label="Shared practice history" className="mt-2 space-y-2">{space && drives.map((drive) => <li key={`${selected}-${drive.id}`} className="space-y-2 rounded border border-border p-3"><p>{drive.date} · {drive.minutes} minutes · {drive.nightMinutes} at night</p>{drive.routeSnapshot && <SharedRouteCard route={drive.routeSnapshot} recorded uid={uid} spaceId={selected} routeId={drive.routeId} />}<p>{drive.notes}</p><p className="text-muted-foreground">Recorded by account {drive.recordedByUid}; reported supervisor account {drive.supervisorPresentUid}.{drive.lastEditedByUid && drive.lastEditedByUid !== drive.recordedByUid ? ` Last edited by account ${drive.lastEditedByUid}.` : ""}</p>{canRecord && (space.role === "manager" || drive.recordedByUid === uid) && <button type="button" className={button} disabled={blocked || !!pending} onClick={() => startEdit(drive)}>Edit practice</button>}</li>)}</ul>
     {cursor && <button type="button" className={`${button} mt-2`} disabled={blocked || loadingMore} onClick={() => void loadMoreHistory()}>{loadingMore ? "Loading drives…" : "Load older drives"}</button>}
     {canRecord && <form className="mt-4 grid gap-2 sm:grid-cols-2" onSubmit={submit}>
-      <p className="sm:col-span-2">For this test, you are recorded as the supervisor reported present. This is not independently verified.</p>
-      <label>Practice date<input className={`${field} mt-1`} type="date" required value={date} disabled={blocked || !!pending} onChange={(event) => setDate(event.target.value)} /></label>
+      {editing ? <p className="font-semibold sm:col-span-2">Editing practice from {editing.date}. The recorded route and reported supervisor stay the same.</p> : <p className="sm:col-span-2">For this test, you are recorded as the supervisor reported present. This is not independently verified.</p>}
+      <label>Practice date<input ref={dateInput} className={`${field} mt-1`} type="date" required value={date} disabled={blocked || !!pending} onChange={(event) => setDate(event.target.value)} /></label>
       <label>Total minutes<input className={`${field} mt-1`} type="number" min="1" max="1440" step="1" required value={minutes} disabled={blocked || !!pending} onChange={(event) => setMinutes(event.target.value)} /></label>
       <label>Night minutes<input className={`${field} mt-1`} type="number" min="0" max={minutes || "0"} step="1" required value={nightMinutes} disabled={blocked || !!pending} onChange={(event) => setNightMinutes(event.target.value)} /></label>
-      <div><label>Saved route (optional)<select className={`${field} mt-1`} value={routeId} disabled={blocked || !!pending} onChange={(event) => { setRouteId(event.target.value); setRouteNotice(""); }}><option value="">No saved route</option>{routes.map((route) => <option key={route.id} value={route.id}>{route.name} · {route.start} → {route.destination}</option>)}</select></label><div className="mt-1 flex flex-wrap gap-2"><button type="button" className={button} disabled={blocked || !!pending} onClick={() => void refreshRoutes()}>Refresh routes for practice</button>{routeCursor && <button type="button" className={button} disabled={blocked || !!pending || loadingRoutes} onClick={() => void loadMoreRoutes()}>{loadingRoutes ? "Loading routes…" : "Load more routes for practice"}</button>}</div>{routeNotice && <p role="status">{routeNotice}</p>}{routeError && <p role="status">Could not load routes. Refresh before choosing one.</p>}</div>
+      {!editing && <div><label>Saved route (optional)<select className={`${field} mt-1`} value={routeId} disabled={blocked || !!pending} onChange={(event) => { setRouteId(event.target.value); setRouteNotice(""); }}><option value="">No saved route</option>{routes.map((route) => <option key={route.id} value={route.id}>{route.name} · {route.start} → {route.destination}</option>)}</select></label><div className="mt-1 flex flex-wrap gap-2"><button type="button" className={button} disabled={blocked || !!pending} onClick={() => void refreshRoutes()}>Refresh routes for practice</button>{routeCursor && <button type="button" className={button} disabled={blocked || !!pending || loadingRoutes} onClick={() => void loadMoreRoutes()}>{loadingRoutes ? "Loading routes…" : "Load more routes for practice"}</button>}</div>{routeNotice && <p role="status">{routeNotice}</p>}{routeError && <p role="status">Could not load routes. Refresh before choosing one.</p>}</div>}
       <label>Shared practice notes<textarea className={`${field} mt-1`} maxLength={1000} value={notes} disabled={blocked || !!pending} onChange={(event) => setNotes(event.target.value)} /></label>
-      {pending && <p className="sm:col-span-2">The save may already have succeeded. Refresh spaces, review practice history, and retry this same save. The retry details remain available only while this page stays open; after leaving, review history before entering it again.</p>}
-      <div className="flex flex-wrap gap-2 sm:col-span-2"><button className={button} disabled={blocked}>{pending ? "Retry same practice save" : "Save shared practice"}</button>{pending && <button type="button" className={button} disabled={blocked} onClick={() => setDiscarding(true)}>Discard retry details</button>}</div>
+      {pending && <p className="sm:col-span-2">The save may already have succeeded. Refresh spaces, review practice history, and retry this same save. If someone changed the entry, discard the retry and reopen the latest entry to edit. Retry details remain only while this page stays open.</p>}
+      <div className="flex flex-wrap gap-2 sm:col-span-2"><button className={button} disabled={blocked}>{pending ? "Retry same practice save" : editing ? "Save practice changes" : "Save shared practice"}</button>{editing && !pending && <button type="button" className={button} disabled={blocked} onClick={resetForm}>Cancel editing</button>}{pending && <button type="button" className={button} disabled={blocked} onClick={() => setDiscarding(true)}>Discard retry details</button>}</div>
       {discarding && <div className="rounded border border-amber-400 p-3 sm:col-span-2"><p>Discarding does not undo a drive that may already have saved. Review history before creating another entry.</p><div className="mt-2 flex gap-2"><button type="button" className={button} disabled={blocked} onClick={() => { pendingRef.current = null; setPending(null); setDiscarding(false); }}>Confirm discard</button><button type="button" className={button} onClick={() => setDiscarding(false)}>Keep retry details</button></div></div>}
     </form>}
     {pending && !canRecord && <div className="mt-3 rounded border border-amber-400 p-3"><p>The pending save cannot be retried because this account no longer has supervisor access to its space. It may already have saved.</p>{!discarding ? <button type="button" className={`${button} mt-2`} disabled={blocked} onClick={() => setDiscarding(true)}>Discard retry details</button> : <div className="mt-2 flex gap-2"><button type="button" className={button} disabled={blocked} onClick={() => { pendingRef.current = null; setPending(null); setDiscarding(false); setSelected(spaces[0]?.id ?? ""); }}>Confirm discard</button><button type="button" className={button} onClick={() => setDiscarding(false)}>Keep retry details</button></div>}</div>}

@@ -232,5 +232,29 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       return { routeId: route.id, created: true };
     });
   }
-  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute };
+  async function editDrive({ idToken, spaceId, driveId, operationId, expectedRevision, date, minutes, nightMinutes, notes }) {
+    const caller = await identity(idToken);
+    if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || typeof expectedRevision !== "string" || !/^(0|[1-9]\d{0,15})$/.test(expectedRevision) || !Number.isSafeInteger(Number(expectedRevision)) || Number(expectedRevision) >= Number.MAX_SAFE_INTEGER || !validDate(date) ||
+      typeof minutes !== "string" || !/^[1-9]\d{0,3}$/.test(minutes) || Number(minutes) > 1440 || typeof nightMinutes !== "string" || !/^(0|[1-9]\d{0,3})$/.test(nightMinutes) || Number(nightMinutes) > Number(minutes) || typeof notes !== "string" || notes.length > 1000) throw new Error("Invalid drive details.");
+    const { space, member } = refs(spaceId, caller.uid);
+    const drive = space.collection("drives").doc(checkId(driveId));
+    const operation = space.collection("driveEditOperations").doc(operationId);
+    const fingerprint = createHash("sha256").update(JSON.stringify([drive.id, caller.uid, expectedRevision, date, minutes, nightMinutes, notes])).digest("hex");
+    return db.runTransaction(async (tx) => {
+      const [spaceSnap, actorSnap, driveSnap, operationSnap] = await tx.getAll(space, member, drive, operation);
+      const actor = actorSnap.data(), existing = driveSnap.data();
+      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !driveSnap.exists ||
+        !((actor.role === "manager" && caller.uid === spaceSnap.data().managerUid) || (actor.role === "supervisor" && existing.recordedByUid === caller.uid))) throw unauthorized();
+      if (operationSnap.exists) {
+        if (operationSnap.data().fingerprint !== fingerprint) throw new Error("Edit operation conflicts with an existing request.");
+        return { driveId: drive.id, updated: false };
+      }
+      const revision = existing.revision ?? 0;
+      if (!Number.isSafeInteger(revision) || revision < 0 || revision !== Number(expectedRevision)) throw new Error("Drive changed on another device.");
+      tx.update(drive, { date, minutes: Number(minutes), nightMinutes: Number(nightMinutes), notes, revision: revision + 1, lastEditedByUid: caller.uid, lastEditedAt: FieldValue.serverTimestamp() });
+      tx.create(operation, { fingerprint, createdAt: FieldValue.serverTimestamp() });
+      return { driveId: drive.id, updated: true };
+    });
+  }
+  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive };
 }
