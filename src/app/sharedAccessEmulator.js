@@ -7,7 +7,7 @@ export const sharedAccessEmulatorEnabled = import.meta.env.DEV &&
   import.meta.env.VITE_FIREBASE_USE_EMULATORS === "true" &&
   import.meta.env.VITE_FIREBASE_PROJECT_ID === "demo-driveready";
 
-const gateway = "http://127.0.0.1:4175";
+const gateway = import.meta.env.VITE_SHARED_GATEWAY_PORT === "4176" ? "http://127.0.0.1:4176" : "http://127.0.0.1:4175";
 const paths = Object.freeze({ createSpace: "/v1/spaces", createInvitation: "/v1/invitations", previewInvitation: "/v1/invitations/preview", acceptInvitation: "/v1/invitations/accept", removeMember: "/v1/members/remove", listInvitations: "/v1/invitations/list", cancelInvitationById: "/v1/invitations/cancel-by-id", createDrive: "/v1/drives", editDrive: "/v1/drives/edit", createRoute: "/v1/routes" });
 
 function currentUser(uid) {

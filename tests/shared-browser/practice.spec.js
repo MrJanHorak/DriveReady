@@ -3,6 +3,13 @@ import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { randomUUID } from "node:crypto";
+const geometry = [{ lat: 33.47, lng: -82.01 }, { lat: 33.48, lng: -82.02 }];
+async function drawRoute(page) {
+  const map = page.getByRole("region", { name: "Route drawing map" });
+  await map.click({ position: { x: 150, y: 120 } });
+  await map.click({ position: { x: 230, y: 160 } });
+  await expect(page.getByText("2 / 50 points")).toBeVisible();
+}
 
 test("a supervisor retries an uncertain save without duplication and the learner can read it", async ({ browser }) => {
   if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.FIREBASE_AUTH_EMULATOR_HOST !== "127.0.0.1:9099") throw new Error("Local emulators are required.");
@@ -12,7 +19,7 @@ test("a supervisor retries an uncertain save without duplication and the learner
   try {
     const accounts = await Promise.all(["manager", "supervisor", "learner"].map((role) => adminAuth.createUser({ email: `practice-${role}-${suffix}@example.test`, password, emailVerified: true })));
     const [manager, supervisor, learner] = accounts;
-    const space = db.collection("spaces").doc(), other = db.collection("spaces").doc(), batch = db.batch();
+    const space = db.collection("spaces").doc(), other = db.collection("spaces").doc(), initialRoute = randomUUID(), batch = db.batch();
     batch.set(space, { learnerName: "Practice learner", status: "active", managerUid: manager.uid, learnerUid: learner.uid, invitationVersion: 0 });
     batch.set(other, { learnerName: "Other learner", status: "active", managerUid: manager.uid, learnerUid: null, invitationVersion: 0 });
     for (const [account, role] of [[manager, "manager"], [supervisor, "supervisor"], [learner, "learner"]]) {
@@ -20,26 +27,29 @@ test("a supervisor retries an uncertain save without duplication and the learner
       batch.set(db.doc(`users/${account.uid}/spaceLinks/${space.id}`), { spaceId: space.id });
     }
     batch.set(other.collection("members").doc(manager.uid), { role: "manager", active: true, emailAtJoining: manager.email });
+    batch.set(space.collection("routes").doc(initialRoute), { name: "First fictional route", start: "Example park", destination: "Example library", geometry, createdByUid: manager.uid });
     batch.set(db.doc(`users/${manager.uid}/spaceLinks/${other.id}`), { spaceId: other.id });
     await batch.commit();
     async function login(account) {
       const context = await browser.newContext(); contexts.push(context);
       const page = await context.newPage();
-      await page.goto("http://127.0.0.1:4173/");
+      await page.goto("/");
       await page.getByLabel("Email", { exact: true }).fill(account.email);
       await page.getByLabel("Password", { exact: true }).fill(password);
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
-      await page.getByRole("button", { name: "Shared space", exact: true }).click();
+      await page.getByRole("button", { name: "Driving Logs", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Shared practice · local emulator" })).toBeVisible();
       return page;
     }
     const adultPage = await login(supervisor);
+    await adultPage.getByRole("button", { name: "Log a drive", exact: true }).click();
     await adultPage.getByLabel("Shared practice notes").fill("Draft survives navigation");
     await adultPage.getByRole("button", { name: "Account", exact: true }).click();
     await expect(adultPage.getByRole("heading", { name: "Shared practice · local emulator" })).toHaveCount(0);
-    await adultPage.getByRole("button", { name: "Shared space", exact: true }).click();
+    await adultPage.getByRole("button", { name: "Driving Logs", exact: true }).click();
     await expect(adultPage.getByLabel("Shared practice notes")).toHaveValue("Draft survives navigation");
     await adultPage.getByLabel("Practice date").fill("2026-10-30");
+    await adultPage.getByLabel("Choose a saved route").selectOption(initialRoute);
     await adultPage.getByLabel("Total minutes").fill("60");
     await adultPage.getByLabel("Night minutes").fill("15");
     await adultPage.getByLabel("Shared practice notes").fill("Synthetic first drive");
@@ -66,9 +76,11 @@ test("a supervisor retries an uncertain save without duplication and the learner
     expect(records.docs[0].id).toBe(submitted.operationId);
     expect(records.docs[0].data().recordedByUid).toBe(supervisor.uid);
     expect(records.docs[0].data().supervisorPresentUid).toBe(supervisor.uid);
+    await adultPage.getByRole("button", { name: "Routes", exact: true }).click();
     await adultPage.getByLabel("Route name", { exact: true }).fill("Fictional loop");
     await adultPage.getByLabel("Start description").fill("Example park");
     await adultPage.getByLabel("Destination description").fill("Example library");
+    await drawRoute(adultPage);
     await adultPage.route("**/v1/routes", async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       const response = await route.fetch();
@@ -83,9 +95,11 @@ test("a supervisor retries an uncertain save without duplication and the learner
     await expect(adultPage.getByRole("list", { name: "Shared routes" })).toContainText("Fictional loop");
     await adultPage.getByRole("button", { name: "Retry same route save" }).click();
     await expect(adultPage.getByText("Shared route saved.")).toBeVisible();
-    expect((await space.collection("routes").get()).size).toBe(1);
+    expect((await space.collection("routes").get()).size).toBe(2);
+    await adultPage.getByRole("button", { name: "Driving Logs", exact: true }).click();
+    await adultPage.getByRole("button", { name: "Log a drive", exact: true }).click();
     await adultPage.getByRole("button", { name: "Refresh routes for practice" }).click();
-    await adultPage.getByLabel("Saved route (optional)").selectOption({ label: "Fictional loop · Example park → Example library" });
+    await adultPage.getByLabel("Choose a saved route").selectOption({ label: "Fictional loop · Example park → Example library" });
     await adultPage.getByLabel("Practice date").fill("2026-10-31");
     await adultPage.getByLabel("Total minutes").fill("20");
     await adultPage.getByLabel("Shared practice notes").fill("Fictional route practice");
@@ -98,30 +112,37 @@ test("a supervisor retries an uncertain save without duplication and the learner
     await expect(history).toContainText("Fictional loop");
     await expect(learnerPage.getByLabel("Shared practice totals")).toContainText("80 minutes, including 15 at night");
     await expect(learnerPage.getByRole("button", { name: "Save shared practice" })).toHaveCount(0);
+    await learnerPage.getByRole("button", { name: "Routes", exact: true }).click();
     await expect(learnerPage.getByRole("list", { name: "Shared routes" })).toContainText("Fictional loop");
     await expect(learnerPage.getByRole("button", { name: "Save shared route" })).toHaveCount(0);
     const routeList = learnerPage.getByRole("list", { name: "Shared routes" });
-    await routeList.locator("summary").filter({ hasText: "Fictional loop" }).click();
-    await expect(routeList.getByText("This description has no mapped path or navigation yet.")).toBeVisible();
-    const routeDoc = (await space.collection("routes").get()).docs[0];
+    const selectedRouteCard = routeList.locator("li").filter({ hasText: "Fictional loop" });
+    await selectedRouteCard.locator("summary").click();
+    await expect(selectedRouteCard.getByText("Drawn route:", { exact: false })).toBeVisible();
+    const routeDoc = (await space.collection("routes").where("name", "==", "Fictional loop").get()).docs[0];
     await routeDoc.ref.update({ name: "Renamed fictional loop" });
-    await history.locator("summary").filter({ hasText: "Fictional loop" }).click();
-    await expect(history.getByText("This is the description saved with the drive.")).toBeVisible();
-    await history.getByRole("button", { name: "View saved route" }).click();
-    await expect(history.getByLabel("Current saved route")).toContainText("Renamed fictional loop");
-    await expect(history.locator("summary").filter({ hasText: "Fictional loop" })).toBeVisible();
+    await learnerPage.getByRole("button", { name: "Driving Logs", exact: true }).click();
+    const recordedRouteCard = history.locator("li").filter({ hasText: "Fictional route practice" });
+    await recordedRouteCard.locator("summary").filter({ hasText: "Fictional loop" }).click();
+    await expect(recordedRouteCard.getByText("This is the description saved with the drive.")).toBeVisible();
+    await recordedRouteCard.getByRole("button", { name: "View saved route" }).click();
+    await expect(recordedRouteCard.getByLabel("Current saved route")).toContainText("Renamed fictional loop");
+    await expect(recordedRouteCard.locator("summary").filter({ hasText: "Fictional loop" })).toBeVisible();
     await space.collection("members").doc(learner.uid).update({ active: false });
-    await history.getByRole("button", { name: "View saved route" }).click();
-    await expect(history.getByText("Could not load the saved route.", { exact: false })).toBeVisible();
-    await expect(history.getByLabel("Current saved route")).toHaveCount(0);
+    await recordedRouteCard.getByRole("button", { name: "View saved route" }).click();
+    await expect(recordedRouteCard.getByText("Could not load the saved route.", { exact: false })).toBeVisible();
+    await expect(recordedRouteCard.getByLabel("Current saved route")).toHaveCount(0);
     const managerPage = await login(manager);
     await managerPage.getByRole("combobox", { name: "Practice learner" }).selectOption({ label: "Other learner · manager" });
     await expect(managerPage.getByRole("list", { name: "Shared practice history" })).not.toContainText("Synthetic first drive");
     await expect(managerPage.getByLabel("Shared practice totals")).toContainText("0 minutes, including 0 at night");
+    await managerPage.getByRole("button", { name: "Routes", exact: true }).click();
     await managerPage.getByLabel("Route learner").selectOption({ label: "Other learner · manager" });
     await expect(managerPage.getByRole("list", { name: "Shared routes" })).not.toContainText("Fictional loop");
+    await adultPage.getByRole("button", { name: "Log a drive", exact: true }).click();
     await adultPage.getByLabel("Practice date").fill("2026-10-31");
     await adultPage.getByLabel("Total minutes").fill("20");
+    await adultPage.getByLabel("Choose a saved route").selectOption(initialRoute);
     await adultPage.route("**/v1/drives", async (route) => route.request().method() === "POST" ? route.abort("failed") : route.continue());
     await adultPage.getByRole("button", { name: "Save shared practice" }).click();
     await expect(adultPage.getByText("Could not confirm the request.", { exact: false })).toBeVisible();
@@ -152,11 +173,11 @@ test("learner can page through same-day practice without duplicates and loses ac
     for (let i = 0; i < 101; i++) batch.set(space.collection("drives").doc(`drive-${String(i).padStart(3, "0")}`), { date: "2026-10-30", minutes: 10, nightMinutes: 2, notes: `Fictional drive ${i}`, recordedByUid: "fictional-manager", supervisorPresentUid: "fictional-manager" });
     await batch.commit();
     const page = await context.newPage();
-    await page.goto("http://127.0.0.1:4173/");
+    await page.goto("/");
     await page.getByLabel("Email", { exact: true }).fill(learner.email);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await page.getByRole("button", { name: "Shared space", exact: true }).click();
+    await page.getByRole("button", { name: "Driving Logs", exact: true }).click();
     const totals = page.getByLabel("Shared practice totals"), list = page.getByRole("list", { name: "Shared practice history" });
     await expect(totals).toContainText("Totals for loaded drives: 500 minutes, including 100 at night");
     await page.getByRole("button", { name: "Load older drives" }).click();
@@ -190,16 +211,15 @@ test("routes with the same name page separately for each learner and can be logg
       batch.set(db.doc(`users/${manager.uid}/spaceLinks/${ref.id}`), { spaceId: ref.id });
     }
     const ids = Array.from({ length: 101 }, () => randomUUID()).sort();
-    for (let i = 0; i < ids.length; i++) batch.set(space.collection("routes").doc(ids[i]), { name: "Same name", start: `Example start ${i}`, destination: "Example destination", createdByUid: manager.uid });
+    for (let i = 0; i < ids.length; i++) batch.set(space.collection("routes").doc(ids[i]), { name: "Same name", start: `Example start ${i}`, destination: "Example destination", geometry, createdByUid: manager.uid });
     await batch.commit();
     const page = await context.newPage();
-    await page.goto("http://127.0.0.1:4173/");
+    await page.goto("/");
     await page.getByLabel("Email", { exact: true }).fill(manager.email);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await page.getByRole("button", { name: "Shared space", exact: true }).click();
+    await page.getByRole("button", { name: "Routes", exact: true }).click();
     await page.getByLabel("Route learner").selectOption({ label: "Paged routes learner · manager" });
-    await page.getByLabel("Practice learner").selectOption({ label: "Paged routes learner · manager" });
     const list = page.getByRole("list", { name: "Shared routes" });
     await expect(list.locator("li")).toHaveCount(50);
     await page.getByRole("button", { name: "Load more saved routes" }).click();
@@ -207,7 +227,10 @@ test("routes with the same name page separately for each learner and can be logg
     await page.getByRole("button", { name: "Load more saved routes" }).click();
     await expect(list.locator("li")).toHaveCount(101);
     await expect(list).toContainText("Example start 100");
-    const routeSelect = page.getByLabel("Saved route (optional)");
+    await page.getByRole("button", { name: "Driving Logs", exact: true }).click();
+    await page.getByLabel("Practice learner").selectOption({ label: "Paged routes learner · manager" });
+    await page.getByRole("button", { name: "Log a drive", exact: true }).click();
+    const routeSelect = page.getByLabel("Choose a saved route");
     await expect(routeSelect.locator("option")).toHaveCount(51);
     await page.getByRole("button", { name: "Load more routes for practice" }).click();
     await expect(routeSelect.locator("option")).toHaveCount(101);
@@ -224,10 +247,14 @@ test("routes with the same name page separately for each learner and can be logg
     await page.getByLabel("Total minutes").fill("30");
     await page.getByRole("button", { name: "Save shared practice" }).click();
     await expect(page.getByRole("list", { name: "Shared practice history" })).toContainText("Example start 100");
+    await page.getByRole("button", { name: "Routes", exact: true }).click();
     await page.getByLabel("Route learner").selectOption({ label: "Other routes learner · manager" });
     await expect(list.locator("li")).toHaveCount(0);
+    await page.getByRole("button", { name: "Driving Logs", exact: true }).click();
     await page.getByLabel("Practice learner").selectOption({ label: "Other routes learner · manager" });
+    await page.getByRole("button", { name: "Log a drive", exact: true }).click();
     await expect(routeSelect.locator("option")).toHaveCount(1);
+    await page.getByRole("button", { name: "Routes", exact: true }).click();
     await page.getByLabel("Route learner").selectOption({ label: "Paged routes learner · manager" });
     await expect(list.locator("li")).toHaveCount(50);
     await space.collection("members").doc(manager.uid).update({ active: false });
@@ -238,4 +265,55 @@ test("routes with the same name page separately for each learner and can be logg
     await context.close();
     await deleteApp(app);
   }
+});
+
+test("creating a route from practice selects it for the intended learner and keeps the draft", async ({ browser }) => {
+  if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.FIREBASE_AUTH_EMULATOR_HOST !== "127.0.0.1:9099") throw new Error("Local emulators are required.");
+  const app = initializeApp({ projectId: "demo-driveready" }, `route-first-${randomUUID()}`);
+  const db = getFirestore(app), context = await browser.newContext();
+  try {
+    const password = "synthetic-password-123";
+    const manager = await getAuth(app).createUser({ email: `route-first-${randomUUID()}@example.test`, password, emailVerified: true });
+    const space = db.collection("spaces").doc(), other = db.collection("spaces").doc(), batch = db.batch();
+    for (const [ref, name] of [[space, "Route-first learner"], [other, "Other route-first learner"]]) {
+      batch.set(ref, { learnerName: name, status: "active", managerUid: manager.uid, learnerUid: null, invitationVersion: 0 });
+      batch.set(ref.collection("members").doc(manager.uid), { role: "manager", active: true, emailAtJoining: manager.email });
+      batch.set(db.doc(`users/${manager.uid}/spaceLinks/${ref.id}`), { spaceId: ref.id });
+    }
+    await batch.commit();
+    const page = await context.newPage();
+    await page.goto("/");
+    await page.getByLabel("Email", { exact: true }).fill(manager.email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByRole("button", { name: "Driving Logs", exact: true }).click();
+    await page.getByLabel("Practice learner").selectOption({ label: "Route-first learner · manager" });
+    await page.getByRole("button", { name: "Routes", exact: true }).click();
+    await page.getByLabel("Route learner").selectOption({ label: "Other route-first learner · manager" });
+    await page.getByRole("button", { name: "Driving Logs", exact: true }).click();
+    await page.getByRole("button", { name: "Log a drive", exact: true }).click();
+    await page.getByLabel("Practice date").fill("2026-10-30");
+    await page.getByLabel("Total minutes").fill("40");
+    await page.getByLabel("Shared practice notes").fill("Draft survives route creation");
+    await expect(page.getByLabel("Choose a saved route")).toHaveAttribute("required", "");
+    await page.getByRole("button", { name: "Save shared practice" }).click();
+    expect((await space.collection("drives").get()).size).toBe(0);
+    await page.getByRole("button", { name: "Create a route", exact: true }).click();
+    await expect(page.getByLabel("Route learner")).toHaveValue(space.id);
+    await page.getByLabel("Route name", { exact: true }).fill("Practice route first");
+    await page.getByLabel("Start description").fill("Fictional start");
+    await page.getByLabel("Destination description").fill("Fictional end");
+    await drawRoute(page);
+    await page.getByRole("button", { name: "Save shared route" }).click();
+    await expect(page.getByText("Route selected. Add the practice details below.")).toBeVisible();
+    await expect(page.getByLabel("Choose a saved route")).toBeFocused();
+    await expect(page.getByLabel("Shared practice notes")).toHaveValue("Draft survives route creation");
+    await expect(page.getByLabel("Total minutes")).toHaveValue("40");
+    const route = (await space.collection("routes").get()).docs[0];
+    await expect(page.getByLabel("Choose a saved route")).toHaveValue(route.id);
+    await page.getByRole("button", { name: "Save shared practice" }).click();
+    await expect(page.getByText("Practice drive saved.")).toBeVisible();
+    expect((await space.collection("drives").get()).docs[0].data().routeId).toBe(route.id);
+    expect((await other.collection("routes").get()).size).toBe(0);
+  } finally { await context.close(); await deleteApp(app); }
 });

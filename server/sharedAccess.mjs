@@ -2,6 +2,7 @@
 // Callers must never supply the Admin SDK instances or clock over a network API.
 import { createHash, randomBytes } from "node:crypto";
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
+import { decodeRoutePolyline } from "../src/app/routePolyline.js";
 
 const INVITATION_LIFETIME_MS = 48 * 60 * 60 * 1000;
 const idPattern = /^[A-Za-z0-9_-]{1,128}$/;
@@ -33,6 +34,15 @@ function validDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+function routeGeometry(value) {
+  if (value === undefined || value === "") return null;
+  if (typeof value !== "string" || value.length > 3000) throw new Error("Invalid route map.");
+  let points;
+  try { points = JSON.parse(value); } catch { throw new Error("Invalid route map."); }
+  if (!Array.isArray(points) || points.length < 2 || points.length > 50 || points.some((point) => !point || typeof point !== "object" || Array.isArray(point) || Object.keys(point).sort().join(",") !== "lat,lng" || typeof point.lat !== "number" || !Number.isFinite(point.lat) || point.lat < -85 || point.lat > 85 || typeof point.lng !== "number" || !Number.isFinite(point.lng) || point.lng < -180 || point.lng > 180)) throw new Error("Invalid route map.");
+  if (points.every((point) => point.lat === points[0].lat && point.lng === points[0].lng)) throw new Error("Select at least two different map points.");
+  return points.map(({ lat, lng }) => ({ lat, lng }));
 }
 
 export function createSharedAccessService({ db, auth, now = Date.now }) {
@@ -207,16 +217,22 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
         if (!Object.entries(data).every(([key, value]) => saved[key] === value) || (saved.routeId ?? "") !== routeId) throw new Error("Drive operation conflicts with an existing record.");
         return { driveId: drive.id, created: false };
       }
+      if (!route) throw new Error("Choose a saved route before recording a drive.");
       if (route && !routeSnap.exists) throw new Error("Route is unavailable in this space.");
-      const routeDetails = route ? { routeId, routeSnapshot: { name: routeSnap.data().name, start: routeSnap.data().start, destination: routeSnap.data().destination } } : {};
+      if (!routeSnap.data().geometry) throw new Error("Choose a mapped route before recording a drive.");
+      routeGeometry(JSON.stringify(routeSnap.data().geometry));
+      const routeDetails = route ? { routeId, routeSnapshot: { name: routeSnap.data().name, start: routeSnap.data().start, destination: routeSnap.data().destination, ...(routeSnap.data().geometry ? { geometry: routeSnap.data().geometry } : {}), ...(routeSnap.data().roadPolyline ? { roadPolyline: routeSnap.data().roadPolyline } : {}) } } : {};
       tx.create(drive, { ...data, ...routeDetails, createdAt: FieldValue.serverTimestamp() });
       return { driveId: drive.id, created: true };
     });
   }
-  async function createRoute({ idToken, spaceId, operationId, name, start, destination }) {
+  async function createRoute({ idToken, spaceId, operationId, name, start, destination, geometry: geometryInput, roadPolyline = "" }) {
     const caller = await identity(idToken);
     const validText = (value, max) => typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\r\n\u2028\u2029]/.test(value);
     if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || !validText(name, 80) || !validText(start, 160) || !validText(destination, 160)) throw new Error("Invalid route details.");
+    const geometry = routeGeometry(geometryInput);
+    if (typeof roadPolyline !== "string") throw new Error("Invalid route line.");
+    if (roadPolyline) { if (!geometry) throw new Error("Invalid route line."); decodeRoutePolyline(roadPolyline); }
     const { space, member } = refs(spaceId, caller.uid);
     const route = space.collection("routes").doc(operationId);
     const data = { name: name.trim(), start: start.trim(), destination: destination.trim(), createdByUid: caller.uid };
@@ -225,10 +241,11 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       const actor = actorSnap.data();
       if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor"].includes(actor.role) || (actor.role === "manager" && caller.uid !== spaceSnap.data().managerUid)) throw unauthorized();
       if (existing.exists) {
-        if (!Object.entries(data).every(([key, value]) => existing.data()[key] === value)) throw new Error("Route operation conflicts with an existing record.");
+        if (!Object.entries(data).every(([key, value]) => existing.data()[key] === value) || JSON.stringify(existing.data().geometry ?? null) !== JSON.stringify(geometry) || (existing.data().roadPolyline ?? "") !== roadPolyline) throw new Error("Route operation conflicts with an existing record.");
         return { routeId: route.id, created: false };
       }
-      tx.create(route, { ...data, createdAt: FieldValue.serverTimestamp() });
+      if (!geometry) throw new Error("Draw a route with at least two map points.");
+      tx.create(route, { ...data, geometry, ...(roadPolyline ? { roadPolyline } : {}), createdAt: FieldValue.serverTimestamp() });
       return { routeId: route.id, created: true };
     });
   }

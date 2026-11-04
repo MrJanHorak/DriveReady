@@ -10,7 +10,7 @@ test("shared edits retry safely, reject stale changes and remain visible to the 
   if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.FIREBASE_AUTH_EMULATOR_HOST !== "127.0.0.1:9099") throw new Error("Local emulators are required.");
   const app = initializeApp({ projectId: "demo-driveready" }, `edit-browser-${randomUUID()}`);
   const db = getFirestore(app), auth = getAuth(app), contexts = [];
-  const gateway = createServer(createLocalSharedGateway({ db, auth }));
+  const gateway = createServer(createLocalSharedGateway({ db, auth, origin: process.env.DRIVEREADY_ISOLATED_DEMO === "true" ? "http://127.0.0.1:4174" : "http://127.0.0.1:4173" }));
   await new Promise((resolve, reject) => { gateway.once("error", reject); gateway.listen(0, "127.0.0.1", resolve); });
   const gatewayUrl = `http://127.0.0.1:${gateway.address().port}/v1/drives/edit`;
   try {
@@ -30,11 +30,11 @@ test("shared edits retry safely, reject stale changes and remain visible to the 
     async function login(user, expectedNotes = "Original notes") {
       const context = await browser.newContext(); contexts.push(context);
       const page = await context.newPage();
-      await page.goto("http://127.0.0.1:4173/");
+      await page.goto("/");
       await page.getByLabel("Email", { exact: true }).fill(user.email);
       await page.getByLabel("Password", { exact: true }).fill(password);
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
-      await page.getByRole("button", { name: "Shared space", exact: true }).click();
+      await page.getByRole("button", { name: "Driving Logs", exact: true }).click();
       if (user.uid === manager.uid) await page.getByLabel("Practice learner").selectOption({ label: "Edit learner · manager" });
       await expect(page.getByRole("list", { name: "Shared practice history" })).toContainText(expectedNotes);
       return page;
@@ -82,7 +82,7 @@ test("shared edits retry safely, reject stale changes and remain visible to the 
     await db.doc(`users/${manager.uid}/spaceLinks/${space.id}`).delete();
     await managerPage.getByRole("button", { name: "Refresh spaces" }).click();
     await expect(managerPage.getByLabel("Practice learner")).toHaveValue(otherSpace.id);
-    await expect(managerPage.getByLabel("Shared practice notes")).toHaveValue("");
+    await expect(managerPage.getByLabel("Shared practice notes")).toHaveCount(0);
     await expect(managerPage.getByText("Editing practice from", { exact: false })).toHaveCount(0);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));

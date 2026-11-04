@@ -50,7 +50,7 @@ test("gateway rejects untrusted origins, missing credentials, unexpected fields 
   assert.equal((await fetch(`${endpoint}/v1/spaces`, { method: "POST", headers: { Origin: origin } })).status, 401);
   assert.equal((await post("/v1/spaces?token=secret", "fake", { learnerName: "A" })).status, 404);
   assert.equal((await post("/v1/spaces", "fake", { learnerName: "A", idToken: "injected" })).status, 400);
-  assert.equal((await post("/v1/spaces", "fake", { learnerName: "x".repeat(5000) })).status, 400);
+  assert.equal((await post("/v1/spaces", "fake", { learnerName: "x".repeat(33000) })).status, 400);
   const invalid = await post("/v1/spaces", "forged-token", { learnerName: "A" });
   assert.equal(invalid.status, 403);
   assert.deepEqual(await invalid.json(), { error: "Request could not be completed." });
@@ -58,7 +58,8 @@ test("gateway rejects untrusted origins, missing credentials, unexpected fields 
 });
 
 test("gateway verifies accounts and invitation scope before granting access", async () => {
-  const manager = await account("manager"), learner = await account("learner"), outsider = await account("outsider");
+  const suffix = randomUUID();
+  const manager = await account(`manager-${suffix}`), learner = await account(`learner-${suffix}`), outsider = await account(`outsider-${suffix}`);
   const created = await post("/v1/spaces", manager.token, { learnerName: "Synthetic learner" });
   assert.equal(created.status, 200);
   const { spaceId } = await created.json();
@@ -75,9 +76,13 @@ test("gateway verifies accounts and invitation scope before granting access", as
   assert.equal((await post("/v1/invitations/accept", learner.token, { spaceId, token })).status, 200);
   assert.equal((await getDocFromServer(doc(learner.db, `spaces/${spaceId}`))).exists(), true);
   assert.equal((await post("/v1/invitations/accept", learner.token, { spaceId, token })).status, 403);
-  const drive = { spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "45", nightMinutes: "10", notes: "Synthetic notes", supervisorPresentUid: manager.uid };
+  const route = await post("/v1/routes", manager.token, { spaceId, operationId: randomUUID(), name: "Fictional route", start: "Example start", destination: "Example end", geometry: JSON.stringify([{ lat: 33.47, lng: -82.01 }, { lat: 33.48, lng: -82.02 }]) });
+  assert.equal(route.status, 200);
+  const drive = { spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "45", nightMinutes: "10", notes: "Synthetic notes", supervisorPresentUid: manager.uid, routeId: (await route.json()).routeId };
   assert.equal((await post("/v1/drives", learner.token, drive)).status, 403);
   assert.equal((await post("/v1/drives", manager.token, { ...drive, recordedByUid: learner.uid })).status, 400);
+  assert.equal((await post("/v1/drives", manager.token, { ...drive, routeId: "" })).status, 403);
+  assert.equal((await getDocFromServer(doc(manager.db, `spaces/${spaceId}/drives/${drive.operationId}`))).exists(), false);
   assert.equal((await post("/v1/drives", manager.token, drive)).status, 200);
   assert.equal((await getDocFromServer(doc(learner.db, `spaces/${spaceId}/drives/${drive.operationId}`))).data().recordedByUid, manager.uid);
 });

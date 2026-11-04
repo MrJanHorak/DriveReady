@@ -1,8 +1,8 @@
 // Local emulator-only adapter. It does not start a server and must not be deployed.
 import { createSharedAccessService } from "./sharedAccess.mjs";
 
-const ORIGIN = "http://127.0.0.1:4173";
-const MAX_BODY = 4096;
+const DEFAULT_ORIGIN = "http://127.0.0.1:4173";
+const MAX_BODY = 32768;
 const routes = Object.freeze({
   "/v1/spaces": { action: "createSpace", fields: ["learnerName"] },
   "/v1/invitations": { action: "createInvitation", fields: ["spaceId", "recipientEmail", "role"] },
@@ -14,7 +14,7 @@ const routes = Object.freeze({
   "/v1/members/remove": { action: "removeMember", fields: ["spaceId", "memberUid"] },
   "/v1/drives": { action: "createDrive", fields: ["spaceId", "operationId", "date", "minutes", "nightMinutes", "notes", "supervisorPresentUid"], optional: ["routeId"] },
   "/v1/drives/edit": { action: "editDrive", fields: ["spaceId", "driveId", "operationId", "expectedRevision", "date", "minutes", "nightMinutes", "notes"] },
-  "/v1/routes": { action: "createRoute", fields: ["spaceId", "operationId", "name", "start", "destination"] },
+  "/v1/routes": { action: "createRoute", fields: ["spaceId", "operationId", "name", "start", "destination"], optional: ["geometry", "roadPolyline"] },
 });
 
 function readBody(req) {
@@ -35,7 +35,8 @@ function readBody(req) {
   });
 }
 
-export function createLocalSharedGateway({ db, auth }) {
+export function createLocalSharedGateway({ db, auth, origin = DEFAULT_ORIGIN }) {
+  if (![DEFAULT_ORIGIN, "http://127.0.0.1:4174"].includes(origin)) throw new Error("Local demo origin required.");
   if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.FIREBASE_AUTH_EMULATOR_HOST !== "127.0.0.1:9099" || db.projectId !== "demo-driveready" || auth.app.options.projectId !== "demo-driveready") {
     throw new Error("Local demo Auth and Firestore emulators are required.");
   }
@@ -52,8 +53,8 @@ export function createLocalSharedGateway({ db, auth }) {
     const failure = { error: "Request could not be completed." };
     if (!["127.0.0.1", "::ffff:127.0.0.1"].includes(req.socket.localAddress)) { respond(403, failure); return; }
     if (req.url === "/health" && req.method === "GET" && !req.headers.origin) { respond(200, { ok: true }); return; }
-    if (req.headers.origin !== ORIGIN) { respond(403, failure); return; }
-    res.setHeader("Access-Control-Allow-Origin", ORIGIN);
+    if (req.headers.origin !== origin) { respond(403, failure); return; }
+    res.setHeader("Access-Control-Allow-Origin", origin);
     if (!Object.hasOwn(routes, req.url)) { respond(404, failure); return; }
     if (req.method === "OPTIONS") {
       if (req.headers["access-control-request-method"] !== "POST") { respond(405, failure); return; }

@@ -1408,7 +1408,7 @@ export default function App() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [wizardOpen, setWizardOpen] = useState(false);
   const [familyBusy, setFamilyBusy] = useState(false);
-  const workspaceNav = [...navItems, ...(sharedAccessEmulatorEnabled ? [{ id: "shared", label: "Shared space", icon: <Users size={17} /> }] : []), { id: "account", label: "Account", icon: <UserCircle2 size={17} /> }];
+  const workspaceNav = [...(sharedAccessEmulatorEnabled ? navItems.map((item) => item.id === "routes" ? { ...item, label: "Routes" } : item) : navItems), ...(sharedAccessEmulatorEnabled ? [{ id: "shared", label: "People & access", icon: <Users size={17} /> }] : []), { id: "account", label: "Account", icon: <UserCircle2 size={17} /> }];
   const title = workspaceNav.find((item) => item.id === activeNav)?.label ?? "Dashboard";
 
   return <div className="flex h-screen w-screen overflow-hidden bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -1422,7 +1422,7 @@ export default function App() {
     </aside>
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <header className="flex h-16 flex-shrink-0 items-center border-b border-border bg-card px-5"><h1 className="text-lg font-bold">{title}</h1></header>
-      {activeNav === "routes" && <>
+      {activeNav === "routes" && !sharedAccessEmulatorEnabled && <>
         <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900"><strong>Design preview:</strong> These Augusta-area routes, maps, ratings, and safety notes are fictional examples. They are not location-aware or suitable for navigation. Route creation is a preview and does not save or publish.</div>
         <RouteExplorer onPublish={() => setWizardOpen(true)} />
       </>}

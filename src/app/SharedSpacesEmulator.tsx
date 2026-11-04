@@ -10,7 +10,7 @@ type Invitation = { id: string; recipientEmail: string; role: string; expiresAt:
 const field = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm";
 const button = "rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50";
 
-export default function SharedSpacesEmulator({ uid, verified, disabled, onBusyChange }: { uid: string; verified: boolean; disabled: boolean; onBusyChange: (busy: boolean) => void }) {
+export default function SharedSpacesEmulator({ uid, verified, disabled, onBusyChange, page, onNavigate }: { uid: string; verified: boolean; disabled: boolean; onBusyChange: (busy: boolean) => void; page: string; onNavigate: (page: string) => void }) {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [selected, setSelected] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
@@ -31,6 +31,8 @@ export default function SharedSpacesEmulator({ uid, verified, disabled, onBusyCh
   const [status, setStatus] = useState("");
   const [uncertain, setUncertain] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [routeRequest, setRouteRequest] = useState<{ spaceId: string; nonce: string } | null>(null);
+  const [createdRoute, setCreatedRoute] = useState<{ spaceId: string; routeId: string; nonce: string } | null>(null);
   const busyRef = useRef(false);
   const generation = useRef(0);
   const memberGeneration = useRef(0);
@@ -105,15 +107,17 @@ export default function SharedSpacesEmulator({ uid, verified, disabled, onBusyCh
     finally { busyRef.current = false; if (alive.current) setBusy(false); onBusyChange(false); }
   }
   const blocked = busy || disabled || !verified || uncertain;
-  return <section className="mt-4 rounded-xl border border-dashed border-[#0C7A8D] bg-[#E4EFF2]/40 p-4">
+  return <section className="rounded-xl bg-card p-4 sm:p-5">
     <h3 className="font-semibold">Shared spaces · local emulator only</h3>
-    <p className="mt-1 text-sm text-muted-foreground">This test is separate from existing records. No invitation messages are sent. Use fictional data only.</p>
     {!verified && <p className="mt-2 text-sm">Verify your email in the emulator to use this test.</p>}
     {status && <p role="status" className="mt-2 text-sm">{status}</p>}
     <div className="mt-3 flex items-center gap-2"><button type="button" disabled={busy || disabled || !verified} className={button} onClick={() => { setStatus(""); void refresh(); void refreshMembers(); void refreshInvitations(); }}>Refresh spaces</button><span className="text-sm">{spaces.length} {spaces.length === 1 ? "space" : "spaces"}</span></div>
+    {spaces.length === 0 && page !== "shared" && <p className="mt-3 text-sm">Add a learner in <button type="button" className="text-[#0C7A8D] underline" onClick={() => onNavigate("shared")}>People &amp; access</button> to get started.</p>}
+    <div hidden={page !== "dashboard" && page !== "logs"}><SharedPracticeEmulator uid={uid} spaces={spaces} blocked={blocked} run={run} createdRoute={createdRoute} onCreateRoute={(spaceId) => { onNavigate("routes"); setRouteRequest({ spaceId, nonce: crypto.randomUUID() }); }} /></div>
+    <div hidden={page !== "routes"}><SharedRoutesEmulator uid={uid} spaces={spaces} blocked={blocked} run={run} createRequest={routeRequest} activePage={page === "routes"} onCreated={(spaceId, routeId) => { if (routeRequest?.spaceId === spaceId) { setCreatedRoute({ spaceId, routeId, nonce: crypto.randomUUID() }); setRouteRequest(null); onNavigate("logs"); } }} /></div>
+    <div hidden={page !== "shared"}>
+    <p className="mt-3 text-sm text-muted-foreground">Use fictional data. Invitations are not emailed.</p>
     {spaces.length > 0 && <ul className="mt-2 space-y-1 text-sm" aria-label="Shared spaces">{spaces.map((space) => <li key={space.id}>{space.learnerName} · {space.role}</li>)}</ul>}
-    <SharedPracticeEmulator uid={uid} spaces={spaces} blocked={blocked} run={run} />
-    <SharedRoutesEmulator uid={uid} spaces={spaces} blocked={blocked} run={run} />
     <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); void run(async () => { await sharedAccessRequest(uid, "createSpace", { learnerName: learnerName.trim() }); setLearnerName(""); const loaded = await refresh(); setStatus(loaded ? "Learner space created." : "Learner space created, but the list could not refresh."); }); }}>
       <label className="text-sm">Learner name for shared space<input className={`${field} mt-1`} value={learnerName} maxLength={60} required disabled={blocked} onChange={(event) => setLearnerName(event.target.value)} /></label><button className={button} disabled={blocked}>Create shared space</button>
     </form>
@@ -145,5 +149,6 @@ export default function SharedSpacesEmulator({ uid, verified, disabled, onBusyCh
       <div><button className={button} disabled={blocked}>Review invitation</button></div>
     </form>
     {preview && <div className="mt-3 rounded-lg bg-card p-3 text-sm"><p>Invitation to {preview.learnerName}’s space as {preview.role}. Access begins only after acceptance.</p><div className="mt-2 flex gap-2"><button type="button" className={button} disabled={blocked} onClick={() => void run(async () => { await sharedAccessRequest(uid, "acceptInvitation", { spaceId: joinSpace.trim(), token: joinToken.trim() }); setPreview(null); setJoinToken(""); setJoinSpace(""); const loaded = await refresh(); setStatus(loaded ? "Invitation accepted." : "Invitation accepted, but the list could not refresh."); })}>Accept invitation</button><button type="button" className={button} disabled={busy} onClick={() => setPreview(null)}>Cancel</button></div></div>}
+    </div>
   </section>;
 }

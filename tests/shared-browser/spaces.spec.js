@@ -17,7 +17,7 @@ test("manager, invited supervisor and learner can join only the intended space",
       const context = await browser.newContext();
       contexts.push(context);
       const page = await context.newPage();
-      await page.goto("http://127.0.0.1:4173/");
+      await page.goto("/");
       await expect(page.getByText("Shared local demo.", { exact: false })).toBeVisible();
       await page.getByLabel("Email", { exact: true }).fill(email);
       await page.getByLabel("Password", { exact: true }).fill(password);
@@ -26,7 +26,7 @@ test("manager, invited supervisor and learner can join only the intended space",
       await page.getByRole("button", { name: "Hide password" }).click();
       await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("type", "password");
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
-      await page.getByRole("button", { name: "Shared space", exact: true }).click();
+      await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "People & access", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Shared spaces · local emulator only" })).toBeVisible();
       return page;
     }
@@ -115,7 +115,7 @@ test("manager, invited supervisor and learner can join only the intended space",
   }
 });
 
-test("pending shared and existing cloud operations block conflicting actions", async ({ browser }) => {
+test("pending shared operations block conflicting navigation", async ({ browser }) => {
   if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.FIREBASE_AUTH_EMULATOR_HOST !== "127.0.0.1:9099") throw new Error("Local emulators are required.");
   const adminApp = initializeApp({ projectId: "demo-driveready" }, "busy-browser-admin");
   const email = `busy-${Date.now()}@example.test`, password = "synthetic-password-123";
@@ -124,11 +124,11 @@ test("pending shared and existing cloud operations block conflicting actions", a
   try {
     await getAuth(adminApp).createUser({ email, password, emailVerified: true });
     const page = await context.newPage();
-    await page.goto("http://127.0.0.1:4173/");
+    await page.goto("/");
     await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await page.getByRole("button", { name: "Shared space", exact: true }).click();
+    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "People & access", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Shared spaces · local emulator only" })).toBeVisible();
     let reached;
     let pending = new Promise((resolve) => { reached = resolve; });
@@ -141,23 +141,12 @@ test("pending shared and existing cloud operations block conflicting actions", a
     await page.getByRole("button", { name: "Create shared space" }).click();
     await pending;
     await expect(page.getByRole("button", { name: "Account", exact: true })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Route Explorer" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Routes", exact: true })).toBeDisabled();
     release();
     await expect(page.getByText("Learner space created.")).toBeVisible();
     await page.unroute("**/v1/spaces");
     await page.getByRole("button", { name: "Account", exact: true }).click();
-    const backup = { version: 1, learners: [{ id: "busy-learner", name: "Backup learner" }], drives: [] };
-    await page.getByLabel("Choose backup to copy to cloud").setInputFiles({ name: "backup.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(backup)) });
-    pending = new Promise((resolve) => { reached = resolve; });
-    gate = new Promise((resolve) => { release = resolve; });
-    await page.route("**/documents:commit", async (route) => { reached(); await gate; await route.continue(); });
-    await page.getByRole("button", { name: "Copy to account" }).click();
-    await pending;
-    await expect(page.getByRole("button", { name: "Sign out" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Route Explorer" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Shared space", exact: true })).toBeDisabled();
-    release();
-    await expect(page.getByText(/Import finished: 1 copied/)).toBeVisible();
+    await expect(page.getByLabel("Choose backup to copy to cloud")).toHaveCount(0);
   } finally {
     release?.();
     await context.close();
@@ -180,11 +169,11 @@ test("manager can load another page of invitations", async ({ browser }) => {
     for (let index = 0; index < 26; index++) batch.set(space.collection("invitations").doc(index.toString(16).padStart(64, "0")), { status: "pending", recipientEmail: `person-${index}@example.test`, role: "supervisor", invitationVersion: 0, managerUid: user.uid, expiresAt: Date.now() + 60_000 });
     await batch.commit();
     const page = await context.newPage();
-    await page.goto("http://127.0.0.1:4173/");
+    await page.goto("/");
     await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await page.getByRole("button", { name: "Shared space", exact: true }).click();
+    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "People & access", exact: true }).click();
     const list = page.getByRole("list", { name: "Pending invitations" });
     await expect(list.getByRole("listitem")).toHaveCount(25);
     await page.getByRole("button", { name: "Load more invitations" }).click();
