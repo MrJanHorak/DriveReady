@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentSnapshot } from "firebase/firestore";
-import { readSharedDrives, readSharedRoutes, readSharedRoute, sharedAccessRequest, sharedAccessDemo } from "./sharedAccessEmulator";
+import { readSharedDrives, readSharedRoutes, readSharedRoute, sharedAccessRequest, sharedAccessDemo } from "./sharedClient";
 import SharedRouteCard from "./SharedRouteCard";
 import type { RoutePoint } from "./RouteMap";
-import { PracticeChoices } from "./PracticeCoverage";
+import { PracticeChoices } from "./PracticeChoices";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
 import { SkillTag, heading, primaryButton } from "./design";
 
@@ -16,7 +16,7 @@ type Pending = { action: "createDrive"; body: CreateBody } | { action: "editDriv
 const field = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm";
 const button = "rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50";
 
-export default function SharedPracticeEmulator({ uid, spaces, blocked, run, createdRoute, logRequest, visible = true, routesVersion = 0, onCreateRoute }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void>; createdRoute: { spaceId: string; routeId: string; nonce: string } | null; logRequest?: { spaceId: string; nonce: string } | null; visible?: boolean; routesVersion?: number; onCreateRoute: (spaceId: string) => void }) {
+export default function SharedPractice({ uid, spaces, blocked, run, createdRoute, logRequest, visible = true, routesVersion = 0, onCreateRoute }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void>; createdRoute: { spaceId: string; routeId: string; nonce: string } | null; logRequest?: { spaceId: string; nonce: string } | null; visible?: boolean; routesVersion?: number; onCreateRoute: (spaceId: string) => void }) {
   const [selected, setSelected] = useState("");
   const [drives, setDrives] = useState<Drive[]>([]);
   const [cursor, setCursor] = useState<DocumentSnapshot | null>(null);

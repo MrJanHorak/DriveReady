@@ -8,17 +8,3 @@ export const PRACTICE_CONDITIONS = [
   "Residential roads", "City traffic", "Highway", "Rural roads",
   "Light traffic", "Heavy traffic", "Rain", "Night driving",
 ];
-
-export function practiceCoverage(drives, learnerId, field, choices) {
-  return choices.map((label) => {
-    const matches = drives.filter((drive) => drive.learnerId === learnerId && Array.isArray(drive[field]) && drive[field].includes(label));
-    const lastDate = matches.reduce((latest, drive) => drive.date > latest ? drive.date : latest, "");
-    return { label, count: matches.length, lastDate };
-  });
-}
-
-export function unrecordedSkills(drives, learnerId) {
-  return practiceCoverage(drives, learnerId, "practicedSkills", PRACTICE_SKILLS)
-    .filter((item) => item.count === 0)
-    .map((item) => item.label);
-}

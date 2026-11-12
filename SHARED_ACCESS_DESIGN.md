@@ -1,6 +1,6 @@
 # Shared learner space: proposed access design
 
-Working design, November 2, 2026; status updated November 11, 2026. The model below is implemented and tested for the paths shown. The pieces are the read-only Firestore rules, the trusted service (`server/sharedAccess.mjs`), and the app screens: dashboard, routes, driving logs, and people & access. The service runs either as the local demo gateway or as a deployable server (`server/main.mjs`, see [DEPLOYMENT.md](DEPLOYMENT.md)). It has not been deployed, and client writes remain denied. Without a configured service, the app and the development project still use single-supervisor records under `users/{uid}`. Use synthetic data only until security and privacy review is complete.
+Working design, November 2, 2026; status updated November 12, 2026. The model below is implemented and tested, and it is now the only data model in the app. The pieces are the read-only Firestore rules, the trusted service (`server/sharedAccess.mjs`), and the app screens: dashboard, routes, driving logs, and people & access. The service runs either as the local demo gateway or as the hosted server (`server/main.mjs`). On November 12, 2026 it was deployed on Railway for the development project ([DEPLOYMENT.md](DEPLOYMENT.md)). Client writes remain denied. Use synthetic data only until security and privacy review is complete.
 
 ## Product requirements
 
@@ -64,6 +64,11 @@ Do not use an email address typed into the UI alone as proof that the intended p
 
 ### Implementation status
 
+**November 12, 2026 update.**
+- The single-supervisor workspace (`users/{uid}/learners`, `users/{uid}/drives`) and its backup and import were removed. The rules now deny those paths.
+- The drive form picks up routes saved on the Routes page or by other members whenever Driving Logs opens.
+- The client files lost their "Emulator" suffix: `SharedSpaces.tsx`, `SharedRoutes.tsx`, `SharedPractice.tsx` and `sharedClient.js`.
+
 **November 11, 2026 update.**
 - `server/sharedGateway.mjs` is now the single HTTP handler. The local gateway wraps it with loopback and emulator-only checks. `server/main.mjs` wraps it for hosting with an exact origin allow-list, an in-memory per-client rate limit, startup checks on its settings, and request logs that record no content.
 - When `VITE_SHARED_API_URL` points at a hosted service, the app switches to shared spaces against the configured Firebase project. Demo-only wording appears only in the local demo.
@@ -75,7 +80,7 @@ The earlier notes below remain accurate unless they say "local only" for somethi
 
 `server/sharedAccess.mjs` contains trusted server-side logic, exercised only through the Auth and Firestore emulators by `npm run test:shared`. It verifies Firebase ID tokens and current account status, requires verified matching email addresses, creates a manager's learner space and discovery link atomically, and issues one-time 48-hour invitations using random tokens whose hashes—not raw tokens—are stored. A verified intended recipient can preview the learner name, role, and expiry without gaining access; acceptance rechecks the invitation. A manager can cancel a pending invitation or remove a member. Removal deactivates membership, removes the discovery link, and invalidates **all pending invitations in that space** atomically, including invitations addressed to a member's changed email. Other pending invitees must be re-invited; this conservative behavior needs clear UI before use. A learner slot remains associated with the same learner account after removal; transferring it is not implemented. Expiry is checked using the server clock when the transaction runs.
 
-`server/localSharedGateway.mjs` provides a local-only HTTP handler for emulator tests. It refuses to initialize without the expected local emulators and demo project, checks for a loopback connection and a specific local origin, accepts identity tokens only in the authorization header, limits request size, and returns generic errors. `npm run test:shared:browser` starts the emulators, a temporary loopback gateway, and a specially configured local app to exercise the UI with fictional accounts. The prototype UI is gated to this demo configuration and is absent from the normal application. No invitation messages are sent. These checks are not a production gateway, and the handler has no production rate limiting or operational controls.
+`server/localSharedGateway.mjs` provides a local-only HTTP handler for emulator tests. It refuses to initialize without the expected local emulators and demo project, checks for a loopback connection and a specific local origin, accepts identity tokens only in the authorization header, limits request size, and returns generic errors. `npm run test:browser` starts the emulators, a temporary loopback gateway, and a specially configured local app to exercise the UI with fictional accounts. The prototype UI is gated to this demo configuration and is absent from the normal application. No invitation messages are sent. These checks are not a production gateway, and the handler has no production rate limiting or operational controls.
 
 The local manager screen lists active members for the selected space and requires a confirmation before removal. It explains that removal invalidates all pending invitations and cannot recall already downloaded data. Member records include the verified email at the time of joining to help identify people; this is a historical label and may no longer match their current account email. Earlier emulator records without that field show an account identifier instead. Membership records are readable only by the member or the manager under the local rules; listing the collection requires manager access.
 
@@ -91,17 +96,9 @@ The emulator prototype supports space-private routes with a name, start and dest
 
 Future navigation handoff: [Google Maps URLs](https://developers.google.com/maps/documentation/urls/get-started) and [Apple Maps URLs](https://developer.apple.com/documentation/mapkit/unified-map-urls) can request directions using locations and waypoints. These apps recalculate a route; they do not guarantee the exact saved OSRM line. Google documents a maximum of three intermediate waypoints on mobile browsers and nine on other supported platforms, and support varies. DriveReady allows up to 50 points, so never silently drop waypoints or promise an exact match. Design a clear warning, privacy disclosure, and handling of routes exceeding provider limits before adding links.
 
-## Migration from current single-supervisor data
+## Migration from single-supervisor data
 
-Migration is a separate, explicit action after the new model is implemented and reviewed. Do not automatically migrate or delete browser-local or cloud records.
-
-1. Inventory the source account's learners and drives and offer a private backup. Review the mapping: one proposed space per learner, with that learner's drives assigned to it and the source supervisor as manager. Do not create memberships for anyone else.
-2. Before copying, deploy and verify a server-controlled migration lock in the **legacy** rules so older clients cannot continue writing that account during the snapshot and copy. Hiding controls in the new UI is insufficient. Reject stale or queued writes safely and tell users what happened.
-3. Use a trusted, authenticated migration service with a per-account operation ID and durable per-record progress. Preserve source IDs or a stable mapping; copy in resumable batches without overwriting conflicting destination records. Keep spaces inaccessible to invitees while migration is incomplete.
-4. Verify record counts, IDs, learner-to-drive relationships, field values, and representative totals against the locked source. A partial run must be retryable without duplication. Report mismatches and conflicts for review rather than silently resolving them.
-5. Only after verification, make the new spaces available to the managing supervisor. Preserve the old cloud records and local copy until a separately approved retention and rollback plan is in place. Define how rollback, source unlock, and writes made after cutover are reconciled; do not promise a lossless rollback without it.
-
-This migration design is not implemented. The current import flow is not a shared-space migration service and must not be reused as though it provided locking or atomic cutover.
+Not needed. The development project held fictional data only, so the single-supervisor records were retired instead of migrated (November 12, 2026). The rules deny those paths, and any remaining test records can be deleted in the Firebase console. The earlier migration design (locking, resumable copy, verification and rollback) is in this file's git history in case a real migration is ever needed.
 
 ## Required checks before enabling shared access
 

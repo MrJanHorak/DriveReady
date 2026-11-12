@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Map, ChevronDown } from "lucide-react";
-import { readSharedRoute } from "./sharedAccessEmulator";
+import { readSharedRoute } from "./sharedClient";
 import RouteMap, { type RoutePoint } from "./RouteMap";
 import { decodeRoutePolyline } from "./routePolyline";
 
@@ -19,7 +19,7 @@ export default function SharedRouteCard({ route, recorded, uid, spaceId, routeId
     try {
       const current = await readSharedRoute(uid, spaceId, routeId);
       if (!active.current) return;
-      if (current) setSavedRoute(current as RouteDescription);
+      if (current) setSavedRoute(current as unknown as RouteDescription);
       else setStatus("The saved route is no longer available. The recorded description remains above.");
     } catch {
       if (active.current) setStatus("Could not load the saved route. Check your access and try again.");

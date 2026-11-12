@@ -12,7 +12,7 @@ It is a working prototype. Use fictional data only: security and privacy review 
 - **Driving logs:** log a drive against a saved route, with date, minutes, night minutes, skills, road conditions and shared notes. Managers can correct any entry; supervisors can correct their own.
 - **State requirements:** a sourced Georgia DDS overview with links. Other states are not covered yet.
 
-Shared spaces run in two ways: in the **local demo** (`npm run demo:shared`) with no setup beyond the emulators, or with **plain `npm run dev`** once the shared service is hosted (see [DEPLOYMENT.md](DEPLOYMENT.md)). Without a hosted service, `npm run dev` shows the older single-supervisor workspace and a design-preview route explorer with sample data.
+Shared spaces run in two ways: in the **local demo** (`npm run demo:shared`) with no setup beyond the emulators, or with **plain `npm run dev`** once the shared service is hosted (see [DEPLOYMENT.md](DEPLOYMENT.md)). Without either, the app shows a short setup notice and the State Requirements page.
 
 ## Prerequisites
 
@@ -62,7 +62,7 @@ The demo starts local Auth and Firestore emulators, the local shared gateway and
 
 ## Run against your Firebase project
 
-`npm run dev` uses `.env.development.local` (copy [.env.example](.env.example) and fill in your project's web app settings). To get the shared spaces, dashboard and route editor there, host the shared service and set `VITE_SHARED_API_URL`; [DEPLOYMENT.md](DEPLOYMENT.md) walks through it on Railway. Without that setting you get the older single-supervisor workspace, which stores learners and drives under each account. It is kept only until the shared version replaces it.
+`npm run dev` uses `.env.development.local` (copy [.env.example](.env.example) and fill in your project's web app settings). To get the shared spaces, dashboard and route editor there, host the shared service and set `VITE_SHARED_API_URL`; [DEPLOYMENT.md](DEPLOYMENT.md) walks through it on Railway. Without that setting the app shows a setup notice.
 
 ## Maps and routing
 
@@ -72,29 +72,29 @@ Map tiles come from the public OpenStreetMap tile service by default, which sees
 
 | Command | What it covers | Needs |
 | --- | --- | --- |
-| `npm test` | Practice data, route-line decoding, service config and HTTP handler | Node only |
+| `npm test` | Route-line decoding, service config and HTTP handler | Node only |
+| `npm run typecheck` | TypeScript checks for the app (`tsconfig.json`, strict) | Node only |
 | `npm run test:rules` | Firestore security rules | Firebase CLI, Java 21+ |
-| `npm run test:firebase` | Single-supervisor cloud workspace against emulators | Firebase CLI, Java 21+ |
 | `npm run test:shared` | Shared-space service, local gateway and the deployable server | Firebase CLI, Java 21+ |
-| `npm run test:shared:browser` | Shared demo in Chrome: dashboard, routes, logs, invitations | + Chrome |
-| `npm run test:browser` | Single-supervisor workspace in Chrome | + Chrome |
-| `npm run test:live:dev` | Opt-in check against the development Firebase project | Signed-in Firebase CLI, network |
+| `npm run test:browser` | The app in Chrome: dashboard, routes, logs, invitations, route sync | + Chrome |
 
 Emulator tests use a `demo-` project and synthetic accounts; they never touch a real project. Run `npm run build` to check the production build.
 
 ## Project structure
 
-- `src/app/App.tsx`: app shell (sidebar, header) and the design-preview route explorer used when shared spaces are off.
-- `src/app/design.tsx`: the Figma visual building blocks (cards, progress ring and bars, skill chips, route sketch). Reuse these for new screens.
-- `src/app/SharedDashboard.tsx`, `SharedRoutesEmulator.tsx`, `SharedPracticeEmulator.tsx`, `SharedSpacesEmulator.tsx`: dashboard, routes, driving logs, and people & access for shared spaces. The "Emulator" in the names is historical; they also run against a hosted service.
-- `src/app/sharedAccessEmulator.js`: decides demo or hosted mode and calls the shared service.
-- `src/app/RouteMap.tsx`, `followRoads.js`, `routePolyline.js`: Leaflet map, OSRM request, and route-line decoding.
-- `src/app/FamilyWorkspace.tsx`, `cloudFamily.js`, `familyData.js`: the older single-supervisor workspace.
+- `src/app/App.tsx`: app shell (sidebar, header, navigation).
+- `src/app/Workspace.tsx`, `FirebaseAccount.tsx`: the main content area, sign-in and account, or a setup notice when no shared service is configured.
+- `src/app/design.tsx`: the Figma visual building blocks (cards, progress ring and bars, skill chips, route sketch). Reuse these for new screens; see `guidelines/Guidelines.md`.
+- `src/app/SharedDashboard.tsx`, `SharedRoutes.tsx`, `SharedPractice.tsx`, `SharedSpaces.tsx`: dashboard, routes, driving logs, and people & access.
+- `src/app/sharedClient.js`: decides demo or hosted mode, reads shared data from Firestore and calls the shared service.
+- `src/app/RouteMap.tsx`, `SharedRouteCard.tsx`, `followRoads.js`, `routePolyline.js`: Leaflet maps, OSRM request and route-line decoding.
+- `src/app/practiceData.js`, `PracticeChoices.tsx`: the skills and conditions catalogue (also used by the service) and its checkboxes.
+- `src/app/StateRequirements.tsx`: the Georgia overview.
 - `server/sharedAccess.mjs`: the trusted shared-space service (memberships, invitations, routes, drives).
 - `server/sharedGateway.mjs`: HTTP handler shared by the local demo gateway (`localSharedGateway.mjs`) and the deployable server (`main.mjs`, configured by `config.mjs`).
-- `firestore.rules`: security rules; shared-space data is read-only to clients, and all writes go through the service.
-- `scripts/shared-demo.mjs`: seeds and starts the local demo.
-- `tests/`: browser tests (`browser/`, `shared-browser/`) and the live development check (`live/`).
+- `firestore.rules`: security rules; members can read their learner spaces, and all writes go through the service.
+- `scripts/shared-demo.mjs`: seeds and starts the local demo. `tests/shared-demo-smoke.mjs` signs in to a running demo with each fictional account.
+- `tests/browser/`, `tests/rules/`: browser and rules tests; service tests sit next to the code in `server/`.
 
 ## Documentation
 
@@ -102,7 +102,7 @@ Emulator tests use a `demo-` project and synthetic accounts; they never touch a 
 - [PROJECT_STATUS.md](PROJECT_STATUS.md): where the project stands and what's next
 - [PRODUCT_PLAN.md](PRODUCT_PLAN.md): vision, phases and open product decisions
 - [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md): roles, permissions, invitations and data model
-- [FIREBASE_SETUP.md](FIREBASE_SETUP.md): Firebase projects, rules and the single-supervisor workspace
+- [FIREBASE_SETUP.md](FIREBASE_SETUP.md): Firebase projects, rules and environment settings
 - [SECURITY_REVIEW.md](SECURITY_REVIEW.md): internal review and blockers for a real-data pilot
 
 The original design is [Desktop Web Dashboard Design on Figma](https://www.figma.com/design/Whz9TgPqbRKDzbyiPCFKKg/Desktop-Web-Dashboard-Design). See `ATTRIBUTIONS.md` for attribution.

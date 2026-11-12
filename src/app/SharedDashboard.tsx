@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Clock, Map, Plus, Route as RouteIcon, AlertCircle, CheckCircle2 } from "lucide-react";
-import { readSharedDrives, readSharedRoutes } from "./sharedAccessEmulator";
+import { readSharedDrives, readSharedRoutes } from "./sharedClient";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
 import type { RoutePoint } from "./RouteMap";
 import { Badge, Card, CardHeader, ProgressBar, ProgressRing, RouteSketch, SkillTag, ghostButton, heading, mono, primaryButton } from "./design";

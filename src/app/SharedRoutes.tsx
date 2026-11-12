@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DocumentSnapshot } from "firebase/firestore";
-import { readSharedRoutes, sharedAccessRequest, sharedAccessDemo } from "./sharedAccessEmulator";
+import { readSharedRoutes, sharedAccessRequest, sharedAccessDemo } from "./sharedClient";
 import RouteMap, { type RoutePoint } from "./RouteMap";
 import { decodeRoutePolyline } from "./routePolyline";
 import { followRoads } from "./followRoads";
@@ -13,7 +13,7 @@ type Draft = { spaceId: string; operationId: string; name: string; start: string
 const field = "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm font-normal outline-none transition-all focus:border-[#0C7A8D] focus:ring-2 focus:ring-[#0C7A8D]/15";
 const button = "rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50";
 
-export default function SharedRoutesEmulator({ uid, spaces, blocked, run, createRequest, onCreated, activePage }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void>; createRequest: { spaceId: string; nonce: string } | null; onCreated: (spaceId: string, routeId: string) => void; activePage: boolean }) {
+export default function SharedRoutes({ uid, spaces, blocked, run, createRequest, onCreated, activePage }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void>; createRequest: { spaceId: string; nonce: string } | null; onCreated: (spaceId: string, routeId: string) => void; activePage: boolean }) {
   const [selected, setSelected] = useState("");
   const [routes, setRoutes] = useState<Route[]>([]);
   const [cursor, setCursor] = useState<DocumentSnapshot | null>(null);

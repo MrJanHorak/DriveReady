@@ -55,7 +55,7 @@ Add the service address to `.env.development.local` (for `npm run dev`) or to yo
 VITE_SHARED_API_URL=https://<your-domain>.up.railway.app
 ```
 
-Restart `npm run dev`. After you sign in, the Account page shows **Shared spaces (development)**, and the sidebar gains **People & access**. Add a learner there to start. The older single-supervisor records under each account stay in Firestore but are not shown in shared mode, and they are not migrated (the development project holds fictional data only).
+Restart `npm run dev`. After you sign in, the Account page shows **Shared spaces (development)**, and the full sidebar appears. Add a learner under **People & access** to start. Without `VITE_SHARED_API_URL` the app shows a setup notice instead.
 
 If the app is deployed (for example on Vercel or Netlify), also add its domain under Firebase console → Authentication → Settings → **Authorized domains**, so sign-in works there.
 
@@ -94,7 +94,7 @@ Create an account in the app, then send a verification email from the **Account*
 
 - Rate limiting is per instance and in memory. It slows bursts but is not abuse protection across instances, and there is no sign-up abuse control.
 - Invitations are not emailed; managers share codes themselves.
-- There is no data deletion, account deletion, migration from single-supervisor records, monitoring or alerting.
+- There is no data deletion, account deletion, backup, monitoring or alerting.
 - The public OSRM and OpenStreetMap services are for light testing only (see the README).
 
 See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for the full list before any real family data.

@@ -76,6 +76,7 @@ export async function readSharedMembers(uid, spaceId) {
   }));
 }
 
+/** @param {string} uid @param {string} spaceId @param {import("firebase/firestore").DocumentSnapshot | null} [cursor] */
 export async function readSharedDrives(uid, spaceId, cursor = null) {
   currentUser(uid);
   const constraints = [orderBy("date", "desc"), ...(cursor ? [startAfter(cursor)] : []), limit(51)];
@@ -85,6 +86,7 @@ export async function readSharedDrives(uid, spaceId, cursor = null) {
   return { drives: page.map((item) => ({ id: item.id, ...item.data() })), cursor: snapshot.size > 50 ? page[page.length - 1] : null };
 }
 
+/** @param {string} uid @param {string} spaceId @param {import("firebase/firestore").DocumentSnapshot | null} [cursor] */
 export async function readSharedRoutes(uid, spaceId, cursor = null) {
   currentUser(uid);
   const constraints = [orderBy("name"), ...(cursor ? [startAfter(cursor)] : []), limit(51)];
