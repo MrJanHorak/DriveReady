@@ -3,6 +3,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { decodeRoutePolyline } from "../src/app/routePolyline.js";
+import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "../src/app/practiceData.js";
 
 const INVITATION_LIFETIME_MS = 48 * 60 * 60 * 1000;
 const idPattern = /^[A-Za-z0-9_-]{1,128}$/;
@@ -34,6 +35,14 @@ function validDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+// Optional practice tags arrive as a JSON string array; only catalog labels are kept, in catalog order.
+function practiceTags(value, choices) {
+  if (value === undefined || value === "") return [];
+  let parsed;
+  try { parsed = typeof value === "string" && value.length <= 2000 ? JSON.parse(value) : null; } catch { parsed = null; }
+  if (!Array.isArray(parsed) || parsed.length > choices.length || new Set(parsed).size !== parsed.length || !parsed.every((item) => choices.includes(item))) throw new Error("Invalid practice tags.");
+  return choices.filter((choice) => parsed.includes(choice));
 }
 function routeGeometry(value) {
   if (value === undefined || value === "") return null;
@@ -196,13 +205,14 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     });
   }
 
-  async function createDrive({ idToken, spaceId, operationId, date, minutes, nightMinutes, notes, supervisorPresentUid, routeId = "" }) {
+  async function createDrive({ idToken, spaceId, operationId, date, minutes, nightMinutes, notes, supervisorPresentUid, routeId = "", practicedSkills, practicedConditions }) {
     const caller = await identity(idToken);
     if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || !validDate(date) ||
       typeof minutes !== "string" || !/^[1-9]\d{0,3}$/.test(minutes) || Number(minutes) > 1440 ||
       typeof nightMinutes !== "string" || !/^(0|[1-9]\d{0,3})$/.test(nightMinutes) || Number(nightMinutes) > Number(minutes) ||
       typeof notes !== "string" || notes.length > 1000 || typeof routeId !== "string" || (routeId !== "" && !operationIdPattern.test(routeId))) throw new Error("Invalid drive details.");
     const presentUid = checkId(supervisorPresentUid);
+    const skills = practiceTags(practicedSkills, PRACTICE_SKILLS), conditions = practiceTags(practicedConditions, PRACTICE_CONDITIONS);
     const { space, member } = refs(spaceId, caller.uid);
     const present = space.collection("members").doc(presentUid);
     const drive = space.collection("drives").doc(operationId);
@@ -214,7 +224,8 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !supervisor(actorSnap) || !supervisor(presentSnap)) throw unauthorized();
       if (existing.exists) {
         const saved = existing.data();
-        if (!Object.entries(data).every(([key, value]) => saved[key] === value) || (saved.routeId ?? "") !== routeId) throw new Error("Drive operation conflicts with an existing record.");
+        if (!Object.entries(data).every(([key, value]) => saved[key] === value) || (saved.routeId ?? "") !== routeId ||
+          JSON.stringify(saved.practicedSkills ?? []) !== JSON.stringify(skills) || JSON.stringify(saved.practicedConditions ?? []) !== JSON.stringify(conditions)) throw new Error("Drive operation conflicts with an existing record.");
         return { driveId: drive.id, created: false };
       }
       if (!route) throw new Error("Choose a saved route before recording a drive.");
@@ -222,7 +233,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       if (!routeSnap.data().geometry) throw new Error("Choose a mapped route before recording a drive.");
       routeGeometry(JSON.stringify(routeSnap.data().geometry));
       const routeDetails = route ? { routeId, routeSnapshot: { name: routeSnap.data().name, start: routeSnap.data().start, destination: routeSnap.data().destination, ...(routeSnap.data().geometry ? { geometry: routeSnap.data().geometry } : {}), ...(routeSnap.data().roadPolyline ? { roadPolyline: routeSnap.data().roadPolyline } : {}) } } : {};
-      tx.create(drive, { ...data, ...routeDetails, createdAt: FieldValue.serverTimestamp() });
+      tx.create(drive, { ...data, practicedSkills: skills, practicedConditions: conditions, ...routeDetails, createdAt: FieldValue.serverTimestamp() });
       return { driveId: drive.id, created: true };
     });
   }
@@ -250,14 +261,15 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       return { routeId: route.id, created: true };
     });
   }
-  async function editDrive({ idToken, spaceId, driveId, operationId, expectedRevision, date, minutes, nightMinutes, notes }) {
+  async function editDrive({ idToken, spaceId, driveId, operationId, expectedRevision, date, minutes, nightMinutes, notes, practicedSkills, practicedConditions }) {
     const caller = await identity(idToken);
     if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || typeof expectedRevision !== "string" || !/^(0|[1-9]\d{0,15})$/.test(expectedRevision) || !Number.isSafeInteger(Number(expectedRevision)) || Number(expectedRevision) >= Number.MAX_SAFE_INTEGER || !validDate(date) ||
       typeof minutes !== "string" || !/^[1-9]\d{0,3}$/.test(minutes) || Number(minutes) > 1440 || typeof nightMinutes !== "string" || !/^(0|[1-9]\d{0,3})$/.test(nightMinutes) || Number(nightMinutes) > Number(minutes) || typeof notes !== "string" || notes.length > 1000) throw new Error("Invalid drive details.");
+    const skills = practiceTags(practicedSkills, PRACTICE_SKILLS), conditions = practiceTags(practicedConditions, PRACTICE_CONDITIONS);
     const { space, member } = refs(spaceId, caller.uid);
     const drive = space.collection("drives").doc(checkId(driveId));
     const operation = space.collection("driveEditOperations").doc(operationId);
-    const fingerprint = createHash("sha256").update(JSON.stringify([drive.id, caller.uid, expectedRevision, date, minutes, nightMinutes, notes])).digest("hex");
+    const fingerprint = createHash("sha256").update(JSON.stringify([drive.id, caller.uid, expectedRevision, date, minutes, nightMinutes, notes, skills, conditions])).digest("hex");
     return db.runTransaction(async (tx) => {
       const [spaceSnap, actorSnap, driveSnap, operationSnap] = await tx.getAll(space, member, drive, operation);
       const actor = actorSnap.data(), existing = driveSnap.data();
@@ -269,7 +281,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       }
       const revision = existing.revision ?? 0;
       if (!Number.isSafeInteger(revision) || revision < 0 || revision !== Number(expectedRevision)) throw new Error("Drive changed on another device.");
-      tx.update(drive, { date, minutes: Number(minutes), nightMinutes: Number(nightMinutes), notes, revision: revision + 1, lastEditedByUid: caller.uid, lastEditedAt: FieldValue.serverTimestamp() });
+      tx.update(drive, { date, minutes: Number(minutes), nightMinutes: Number(nightMinutes), notes, practicedSkills: skills, practicedConditions: conditions, revision: revision + 1, lastEditedByUid: caller.uid, lastEditedAt: FieldValue.serverTimestamp() });
       tx.create(operation, { fingerprint, createdAt: FieldValue.serverTimestamp() });
       return { driveId: drive.id, updated: true };
     });

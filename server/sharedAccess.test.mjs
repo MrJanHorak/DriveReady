@@ -325,3 +325,27 @@ test("shared drive edits enforce roles, preserve attribution, reject stale chang
   assert.equal((await service.editDrive(later)).updated, true);
   assert.equal((await service.editDrive(competing.idToken === winner.idToken ? winner : later)).updated, false);
 });
+
+test("shared drives store only catalog skills and conditions, in catalog order, and edits replace them", async () => {
+  const suffix = randomUUID();
+  const manager = await account(`manager-tags-${suffix}`);
+  const { spaceId } = await service.createSpace({ idToken: manager.token, learnerName: "Tagged learner" });
+  const route = await service.createRoute({ idToken: manager.token, spaceId, operationId: randomUUID(), name: "Tag route", start: "Fictional start", destination: "Fictional end", geometry, roadPolyline: testRoadPolyline });
+  const create = { idToken: manager.token, spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "40", nightMinutes: "0", notes: "", supervisorPresentUid: manager.uid, routeId: route.routeId,
+    practicedSkills: JSON.stringify(["Lane changes", "Turns"]), practicedConditions: JSON.stringify(["Rain"]) };
+  for (const bad of [{ practicedSkills: JSON.stringify(["Drifting"]) }, { practicedSkills: JSON.stringify(["Turns", "Turns"]) }, { practicedSkills: "not json" }, { practicedConditions: JSON.stringify(["Turns"]) }, { practicedSkills: JSON.stringify({ a: 1 }) }]) {
+    await assert.rejects(service.createDrive({ ...create, ...bad, operationId: randomUUID() }), /Invalid practice tags/);
+  }
+  assert.equal((await service.createDrive(create)).created, true);
+  assert.equal((await service.createDrive(create)).created, false);
+  await assert.rejects(service.createDrive({ ...create, practicedConditions: "" }), /conflicts/);
+  let saved = (await db.doc(`spaces/${spaceId}/drives/${create.operationId}`).get()).data();
+  assert.deepEqual(saved.practicedSkills, ["Turns", "Lane changes"]);
+  assert.deepEqual(saved.practicedConditions, ["Rain"]);
+  const edit = { idToken: manager.token, spaceId, driveId: create.operationId, operationId: randomUUID(), expectedRevision: "0", date: "2026-10-30", minutes: "40", nightMinutes: "0", notes: "", practicedSkills: JSON.stringify(["Parking"]) };
+  assert.equal((await service.editDrive(edit)).updated, true);
+  await assert.rejects(service.editDrive({ ...edit, practicedSkills: JSON.stringify(["Turns"]) }), /conflicts/);
+  saved = (await db.doc(`spaces/${spaceId}/drives/${create.operationId}`).get()).data();
+  assert.deepEqual(saved.practicedSkills, ["Parking"]);
+  assert.deepEqual(saved.practicedConditions, []);
+});

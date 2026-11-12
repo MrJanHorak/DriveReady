@@ -7,14 +7,12 @@ import {
   Map,
   FileText,
   ClipboardList,
-  Bell,
   ChevronDown,
   Plus,
   Star,
   Clock,
   Navigation,
   CheckCircle2,
-  AlertCircle,
   ChevronRight,
   X,
   MapPin,
@@ -23,7 +21,6 @@ import {
   Shield,
   BookOpen,
   Sliders,
-  Upload,
   Info,
   Search,
   SlidersHorizontal,
@@ -37,14 +34,10 @@ import {
   ThumbsUp,
   Route,
   ArrowUpRight,
-  Filter,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type NavItem = { id: string; label: string; icon: React.ReactNode };
-type Driver = { id: string; name: string; age: number; initials: string };
-type DriveLog = { date: string; route: string; duration: string; skills: string[] };
-type DashRoute = { id: string; title: string; subtitle: string; difficulty: number; duration: string; tags: string[]; mapColor: string };
 type Waypoint = { x: number; y: number; label: string };
 
 type ExplorerRoute = {
@@ -73,26 +66,6 @@ const navItems: NavItem[] = [
   { id: "routes", label: "Route Explorer", icon: <Map size={17} /> },
   { id: "logs", label: "Driving Logs", icon: <FileText size={17} /> },
   { id: "requirements", label: "State Requirements", icon: <ClipboardList size={17} /> },
-];
-
-const drivers: Driver[] = [
-  { id: "1", name: "Emma Hartfield", age: 16, initials: "EH" },
-  { id: "2", name: "Tyler Hartfield", age: 17, initials: "TH" },
-];
-
-const driveLogs: DriveLog[] = [
-  { date: "Jul 3, 2026", route: "Riverside Loop", duration: "1h 12m", skills: ["Highway Merging", "Lane Changes"] },
-  { date: "Jun 29, 2026", route: "Downtown Grid", duration: "45m", skills: ["Parallel Parking", "Pedestrian Awareness"] },
-  { date: "Jun 25, 2026", route: "Quiet Business Park", duration: "38m", skills: ["Low-Speed Turns", "Parking Lot"] },
-  { date: "Jun 20, 2026", route: "I-285 Night Segment", duration: "52m", skills: ["Night Driving", "Highway Merging"] },
-  { date: "Jun 15, 2026", route: "Suburbs East Circuit", duration: "1h 04m", skills: ["4-Way Stop", "Residential Speed"] },
-];
-
-const dashRoutes: DashRoute[] = [
-  { id: "1", title: "Quiet Business Park", subtitle: "Great for Day 1 — wide lanes, minimal traffic", difficulty: 1, duration: "30 mins", tags: ["Beginner", "Low Traffic"], mapColor: "#E4EFF2" },
-  { id: "2", title: "Riverside Scenic Loop", subtitle: "Gentle curves, school zone practice", difficulty: 2, duration: "45 mins", tags: ["School Zone", "Curves"], mapColor: "#E8F4E8" },
-  { id: "3", title: "Downtown Grid — Midtown", subtitle: "Parallel parking & pedestrian traffic", difficulty: 3, duration: "55 mins", tags: ["Parking", "Urban"], mapColor: "#FFF3E4" },
-  { id: "4", title: "I-285 Onramp Circuit", subtitle: "Supervised highway merging practice", difficulty: 4, duration: "40 mins", tags: ["Highway", "Merging"], mapColor: "#F0E8F5" },
 ];
 
 const landmarks = [
@@ -324,25 +297,6 @@ const envIcon = (env: ExplorerRoute["environment"]) => {
 };
 
 // ── Reusable sub-components ────────────────────────────────────────────────
-function SkillTag({ label }: { label: string }) {
-  const colorMap: Record<string, string> = {
-    "Highway Merging": "bg-blue-50 text-blue-700 border-blue-100",
-    "Lane Changes": "bg-indigo-50 text-indigo-700 border-indigo-100",
-    "Parallel Parking": "bg-violet-50 text-violet-700 border-violet-100",
-    "Pedestrian Awareness": "bg-green-50 text-green-700 border-green-100",
-    "Low-Speed Turns": "bg-teal-50 text-teal-700 border-teal-100",
-    "Parking Lot": "bg-cyan-50 text-cyan-700 border-cyan-100",
-    "Night Driving": "bg-slate-100 text-slate-700 border-slate-200",
-    "4-Way Stop": "bg-orange-50 text-orange-700 border-orange-100",
-    "Residential Speed": "bg-amber-50 text-amber-700 border-amber-100",
-  };
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${colorMap[label] ?? "bg-gray-50 text-gray-600 border-gray-100"}`} style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-      {label}
-    </span>
-  );
-}
-
 function DifficultyDots({ level, small }: { level: number; small?: boolean }) {
   const sz = small ? "w-1.5 h-1.5" : "w-2 h-2";
   return (
@@ -351,71 +305,6 @@ function DifficultyDots({ level, small }: { level: number; small?: boolean }) {
         <div key={i} className={`${sz} rounded-full transition-colors ${i < level ? "bg-[#0C7A8D]" : "bg-gray-200"}`} />
       ))}
       {!small && <span className="ml-1 text-xs text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{level}/5</span>}
-    </div>
-  );
-}
-
-function MapPlaceholder({ color, routeId }: { color: string; routeId: string }) {
-  const paths: Record<string, string> = {
-    "1": "M20,70 L60,50 L100,55 L130,40 L160,55",
-    "2": "M20,60 Q50,30 80,55 Q110,75 140,50 L160,45",
-    "3": "M20,40 L60,40 L60,70 L100,70 L100,40 L140,40 L140,80 L160,80",
-    "4": "M20,70 Q60,65 80,50 L130,50 L160,45",
-  };
-  const path = paths[routeId] ?? paths["1"];
-  return (
-    <div className="rounded-lg flex-shrink-0 relative overflow-hidden" style={{ width: 90, height: 64, backgroundColor: color }}>
-      <svg width="100%" height="100%" viewBox="0 0 180 90" className="absolute inset-0">
-        <line x1="0" y1="30" x2="180" y2="30" stroke="rgba(0,0,0,0.06)" strokeWidth="1" />
-        <line x1="0" y1="60" x2="180" y2="60" stroke="rgba(0,0,0,0.06)" strokeWidth="1" />
-        <line x1="60" y1="0" x2="60" y2="90" stroke="rgba(0,0,0,0.06)" strokeWidth="1" />
-        <line x1="120" y1="0" x2="120" y2="90" stroke="rgba(0,0,0,0.06)" strokeWidth="1" />
-        <path d={path} fill="none" stroke="#0C7A8D" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="20" cy={parseInt(path.split(",")[1])} r="3.5" fill="#0C7A8D" />
-        <circle cx="160" cy={parseInt(path.split(" ").pop()!)} r="3.5" fill="#12B5C9" />
-      </svg>
-      <div className="absolute bottom-1.5 right-1.5 bg-white/80 rounded p-0.5">
-        <Navigation size={8} className="text-[#0C7A8D]" />
-      </div>
-    </div>
-  );
-}
-
-function CircularProgressRing({ value, max }: { value: number; max: number }) {
-  const r = 72;
-  const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - value / max);
-  return (
-    <div className="relative flex items-center justify-center" style={{ width: 180, height: 180 }}>
-      <svg width="180" height="180" viewBox="0 0 180 180" className="-rotate-90">
-        <circle cx="90" cy="90" r={r} fill="none" stroke="#E4EFF2" strokeWidth="12" />
-        <circle cx="90" cy="90" r={r} fill="none" stroke="url(#ringGrad)" strokeWidth="12" strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset} style={{ transition: "stroke-dashoffset 1s ease" }} />
-        <defs>
-          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#0C7A8D" />
-            <stop offset="100%" stopColor="#12B5C9" />
-          </linearGradient>
-        </defs>
-      </svg>
-      <div className="absolute flex flex-col items-center">
-        <span className="text-3xl font-bold text-[#0C7A8D]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", lineHeight: 1 }}>{value}</span>
-        <span className="text-xs text-muted-foreground mt-0.5" style={{ fontFamily: "'JetBrains Mono', monospace" }}>/ {max} hrs</span>
-        <span className="text-xs font-medium text-[#12B5C9] mt-1">{Math.round((value / max) * 100)}%</span>
-      </div>
-    </div>
-  );
-}
-
-function SubProgressBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-foreground font-medium">{label}</span>
-        <span className="text-xs text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{value}/{max} hrs</span>
-      </div>
-      <div className="h-2 bg-muted rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min((value / max) * 100, 100)}%`, backgroundColor: color }} />
-      </div>
     </div>
   );
 }
@@ -1212,198 +1101,6 @@ function RouteExplorer({ onPublish }: { onPublish: () => void }) {
 }
 
 // ── Main App ────────────────────────────────────────────────────────────────
-function LegacyApp() {
-  const [activeNav, setActiveNav] = useState("dashboard");
-  const [selectedDriver, setSelectedDriver] = useState<Driver>(drivers[0]);
-  const [driverDropdownOpen, setDriverDropdownOpen] = useState(false);
-  const [notifCount] = useState(3);
-  const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
-  const [wizardOpen, setWizardOpen] = useState(false);
-
-  return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
-
-      {/* ── Sidebar ────────────────────────────────────────────────────── */}
-      <aside className="flex-shrink-0 flex flex-col bg-card border-r border-border" style={{ width: 228 }}>
-        <div className="h-16 flex items-center px-5 border-b border-border gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#0C7A8D] to-[#12B5C9] flex items-center justify-center flex-shrink-0">
-            <Navigation size={14} className="text-white" />
-          </div>
-          <span className="font-bold text-foreground text-sm tracking-tight" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>DriveReady</span>
-        </div>
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-3 mb-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Main</p>
-          {navItems.map((item) => {
-            const active = activeNav === item.id;
-            return (
-              <button key={item.id} onClick={() => setActiveNav(item.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left ${active ? "bg-[#E4EFF2] text-[#0C7A8D]" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-                <span className={active ? "text-[#0C7A8D]" : "text-muted-foreground"}>{item.icon}</span>
-                {item.label}
-                {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#0C7A8D]" />}
-              </button>
-            );
-          })}
-        </nav>
-        <div className="px-3 pb-5">
-          <div className="rounded-xl bg-gradient-to-br from-[#0C7A8D]/8 to-[#12B5C9]/8 border border-[#0C7A8D]/12 p-3.5">
-            <div className="flex items-start gap-2.5">
-              <CheckCircle2 size={15} className="text-[#0C7A8D] mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-xs font-semibold text-[#0C7A8D]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>TADRA Compliant</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">On track for Georgia license eligibility</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* ── Main area ──────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
-        <header className="h-16 flex-shrink-0 flex items-center justify-between px-6 bg-card border-b border-border">
-          <div>
-            <h1 className="text-lg font-bold text-foreground leading-none" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              {activeNav === "dashboard" ? "Dashboard" : activeNav === "routes" ? "Route Explorer" : activeNav === "logs" ? "Driving Logs" : "State Requirements"}
-            </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Sunday, July 6, 2026</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <button onClick={() => setDriverDropdownOpen((v) => !v)} className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#0C7A8D] to-[#12B5C9] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">{selectedDriver.initials}</div>
-                <span className="font-medium text-foreground">{selectedDriver.name}</span>
-                <span className="text-xs text-muted-foreground">Age {selectedDriver.age}</span>
-                <ChevronDown size={13} className="text-muted-foreground ml-0.5" />
-              </button>
-              {driverDropdownOpen && (
-                <div className="absolute top-full mt-1 right-0 bg-card border border-border rounded-xl shadow-lg py-1.5 z-50 min-w-[200px]">
-                  {drivers.map((d) => (
-                    <button key={d.id} onClick={() => { setSelectedDriver(d); setDriverDropdownOpen(false); }} className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-muted transition-colors ${selectedDriver.id === d.id ? "text-[#0C7A8D] font-medium" : "text-foreground"}`}>
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#0C7A8D] to-[#12B5C9] flex items-center justify-center text-white text-[10px] font-bold">{d.initials}</div>
-                      {d.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button className="relative w-9 h-9 flex items-center justify-center rounded-lg border border-border bg-background hover:bg-muted transition-colors">
-              <Bell size={16} className="text-muted-foreground" />
-              {notifCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#0C7A8D] text-white text-[9px] font-bold flex items-center justify-center">{notifCount}</span>}
-            </button>
-            <button onClick={() => setWizardOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0C7A8D] hover:bg-[#0A6A7B] text-white text-sm font-semibold transition-all duration-150 shadow-sm hover:shadow-md">
-              <Plus size={15} /> Plan Next Drive
-            </button>
-          </div>
-        </header>
-
-        {/* ── Conditional content ──────────────────────────────────────── */}
-        {activeNav === "routes" ? (
-          <RouteExplorer onPublish={() => setWizardOpen(true)} />
-        ) : (
-          <main className="flex-1 overflow-y-auto p-6 space-y-5">
-            <div className="grid gap-5" style={{ gridTemplateColumns: "300px 1fr" }}>
-              {/* Progress Tracker */}
-              <div className="bg-card rounded-2xl border border-border p-5 flex flex-col gap-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-base font-bold text-foreground" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Hours Progress</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">Supervised driving total</p>
-                  </div>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#E4EFF2] text-[#0C7A8D] text-[10px] font-semibold border border-[#0C7A8D]/15" style={{ fontFamily: "'JetBrains Mono', monospace" }}><AlertCircle size={9} /> 16 hrs left</span>
-                </div>
-                <div className="flex justify-center"><CircularProgressRing value={24} max={40} /></div>
-                <div className="space-y-4">
-                  <SubProgressBar label="Day Driving" value={20} max={34} color="#0C7A8D" />
-                  <SubProgressBar label="Night Driving" value={4} max={6} color="#12B5C9" />
-                </div>
-                <div className="flex items-center gap-2 pt-1 border-t border-border">
-                  <CheckCircle2 size={13} className="text-[#0C7A8D] flex-shrink-0" />
-                  <span className="text-[11px] text-muted-foreground leading-snug"><span className="font-semibold text-foreground">Georgia</span> — TADRA / Joshua's Law</span>
-                </div>
-              </div>
-
-              {/* Drive Logs */}
-              <div className="bg-card rounded-2xl border border-border flex flex-col overflow-hidden">
-                <div className="flex items-center justify-between px-5 pt-5 pb-4">
-                  <div>
-                    <h2 className="text-base font-bold text-foreground" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Recent Drive Logs</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">Last 5 supervised sessions</p>
-                  </div>
-                  <button className="text-xs font-medium text-[#0C7A8D] hover:underline flex items-center gap-1 transition-colors">View all <ChevronRight size={12} /></button>
-                </div>
-                <div className="flex-1 overflow-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-y border-border bg-muted/50">
-                        {["Date", "Route", "Duration", "Skills Practiced"].map((h) => (
-                          <th key={h} className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {driveLogs.map((log, i) => (
-                        <tr key={i} className="border-b border-border/60 hover:bg-muted/40 transition-colors">
-                          <td className="px-5 py-3.5 text-xs text-muted-foreground whitespace-nowrap" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{log.date}</td>
-                          <td className="px-4 py-3.5"><span className="font-medium text-foreground text-sm">{log.route}</span></td>
-                          <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                            <span className="inline-flex items-center gap-1"><Clock size={11} />{log.duration}</span>
-                          </td>
-                          <td className="px-4 py-3.5"><div className="flex flex-wrap gap-1.5">{log.skills.map((s) => <SkillTag key={s} label={s} />)}</div></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* Recommended Routes */}
-            <div className="bg-card rounded-2xl border border-border overflow-hidden">
-              <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border">
-                <div>
-                  <h2 className="text-base font-bold text-foreground" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Recommended Local Routes</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Crowdsourced routes near Atlanta, GA — filtered for supervised learners</p>
-                </div>
-                <button onClick={() => setActiveNav("routes")} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-                  <Map size={14} /> Browse all routes
-                </button>
-              </div>
-              <div className="p-5 grid gap-3" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
-                {dashRoutes.map((route) => (
-                  <div key={route.id} onMouseEnter={() => setHoveredRoute(route.id)} onMouseLeave={() => setHoveredRoute(null)} className={`flex items-start gap-4 p-4 rounded-xl border transition-all duration-150 cursor-pointer ${hoveredRoute === route.id ? "border-[#0C7A8D]/30 bg-[#E4EFF2]/30 shadow-sm" : "border-border bg-background/60"}`}>
-                    <MapPlaceholder color={route.mapColor} routeId={route.id} />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-foreground leading-snug" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{route.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">{route.subtitle}</p>
-                      <div className="flex items-center gap-3 mt-2.5 flex-wrap">
-                        <DifficultyDots level={route.difficulty} />
-                        <span className="text-muted-foreground text-xs">·</span>
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}><Clock size={11} />{route.duration}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 mt-2.5">{route.tags.map((tag) => <span key={tag} className="text-[10px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">{tag}</span>)}</div>
-                    </div>
-                    <ChevronRight size={15} className={`flex-shrink-0 mt-0.5 transition-colors ${hoveredRoute === route.id ? "text-[#0C7A8D]" : "text-muted-foreground/40"}`} />
-                  </div>
-                ))}
-              </div>
-              <div className="px-5 pb-4 flex items-center gap-2">
-                <div className="flex items-center gap-0.5">{Array.from({ length: 5 }).map((_, i) => <Star key={i} size={11} fill={i < 4 ? "#F59E0B" : "none"} className={i < 4 ? "text-amber-400" : "text-gray-300"} />)}</div>
-                <span className="text-xs text-muted-foreground">Routes verified by 4.1k+ local driving supervisors in the Atlanta metro area</span>
-              </div>
-            </div>
-          </main>
-        )}
-      </div>
-
-      {/* Dropdown backdrop */}
-      {driverDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setDriverDropdownOpen(false)} />}
-
-      {/* Route Wizard modal */}
-      {wizardOpen && <RouteWizard onClose={() => setWizardOpen(false)} />}
-    </div>
-  );
-}
-
 export default function App() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -1411,17 +1108,24 @@ export default function App() {
   const workspaceNav = [...(sharedAccessEmulatorEnabled ? navItems.map((item) => item.id === "routes" ? { ...item, label: "Routes" } : item) : navItems), ...(sharedAccessEmulatorEnabled ? [{ id: "shared", label: "People & access", icon: <Users size={17} /> }] : []), { id: "account", label: "Account", icon: <UserCircle2 size={17} /> }];
   const title = workspaceNav.find((item) => item.id === activeNav)?.label ?? "Dashboard";
 
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
   return <div className="flex h-screen w-screen overflow-hidden bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
-    <aside className="flex w-16 flex-shrink-0 flex-col border-r border-border bg-card sm:w-52">
-      <div className="flex h-16 items-center gap-2 border-b border-border px-4 font-bold text-[#0C7A8D]"><Navigation size={20} /><span className="hidden sm:inline">DriveReady</span></div>
-      <nav aria-label="Main navigation" className="space-y-1 p-2 sm:p-3">
-        {workspaceNav.map((item) => <button key={item.id} title={item.label} aria-label={item.label} aria-current={activeNav === item.id ? "page" : undefined} disabled={familyBusy} onClick={() => setActiveNav(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium disabled:opacity-50 ${activeNav === item.id ? "bg-[#E4EFF2] text-[#0C7A8D]" : "text-muted-foreground hover:bg-muted"}`}>
-          {item.icon}<span className="hidden sm:inline">{item.label}</span>
-        </button>)}
+    <aside className="flex w-16 flex-shrink-0 flex-col border-r border-border bg-card sm:w-[228px]">
+      <div className="flex h-16 items-center gap-2.5 border-b border-border px-4 sm:px-5">
+        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#0C7A8D] to-[#12B5C9]"><Navigation size={14} className="text-white" aria-hidden="true" /></div>
+        <span className="hidden text-sm font-bold tracking-tight text-foreground sm:inline" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>DriveReady</span>
+      </div>
+      <nav aria-label="Main navigation" className="flex-1 space-y-0.5 overflow-y-auto p-2 sm:px-3 sm:py-4">
+        <p className="mb-2 hidden px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground sm:block" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Main</p>
+        {workspaceNav.map((item) => { const active = activeNav === item.id; return <button key={item.id} title={item.label} aria-label={item.label} aria-current={active ? "page" : undefined} disabled={familyBusy} onClick={() => setActiveNav(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all duration-150 disabled:opacity-50 ${active ? "bg-[#E4EFF2] text-[#0C7A8D]" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+          <span className={active ? "text-[#0C7A8D]" : "text-muted-foreground"}>{item.icon}</span><span className="hidden sm:inline">{item.label}</span>
+          {active && <span className="ml-auto hidden h-1.5 w-1.5 rounded-full bg-[#0C7A8D] sm:block" aria-hidden="true" />}
+        </button>; })}
       </nav>
     </aside>
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <header className="flex h-16 flex-shrink-0 items-center border-b border-border bg-card px-5"><h1 className="text-lg font-bold">{title}</h1></header>
+      <header className="flex h-16 flex-shrink-0 items-center border-b border-border bg-card px-5 sm:px-6"><div><h1 className="text-lg font-bold leading-none text-foreground" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{title}</h1><p className="mt-1 text-xs text-muted-foreground">{today}</p></div></header>
       {activeNav === "routes" && !sharedAccessEmulatorEnabled && <>
         <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900"><strong>Design preview:</strong> These Augusta-area routes, maps, ratings, and safety notes are fictional examples. They are not location-aware or suitable for navigation. Route creation is a preview and does not save or publish.</div>
         <RouteExplorer onPublish={() => setWizardOpen(true)} />

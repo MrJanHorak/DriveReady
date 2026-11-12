@@ -33,7 +33,15 @@ try {
   // Fixed OSRM response for these fictional demo points; startup does not contact the routing provider.
   const roadPolyline = "waikEzirsNiB_@UGSHQRcArAQPQHIBWAmBEaEGXiF^sJJw@ZmA@EJe@Po@VeAz@cDtAsFbCbA^N`DpAb@PhDpApB`AzBdApAiF|@^rDzACJVLZD\\@t@C\\?KcFLwFt@iDP}@BMJ_@Ni@Lg@Nk@Nm@q@Uu@W}BcAoAi@eDwA";
   const { routeId } = await service.createRoute({ idToken: accounts.manager.token, spaceId, operationId: randomUUID(), name: "Fictional neighborhood practice", start: "Example park", destination: "Example library", geometry, roadPolyline });
-  await service.createDrive({ idToken: accounts.supervisor.token, spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "60", nightMinutes: "15", notes: "Fictional practice: worked on turns and intersections.", supervisorPresentUid: accounts.supervisor.uid, routeId });
+  await service.createDrive({ idToken: accounts.supervisor.token, spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "60", nightMinutes: "15", notes: "Fictional practice: worked on turns and intersections.", supervisorPresentUid: accounts.supervisor.uid, routeId, practicedSkills: JSON.stringify(["Turns", "Intersections"]), practicedConditions: JSON.stringify(["Residential roads", "Night driving"]) });
+  // A few more fictional drives so the dashboard shows progress, recent drives and coverage.
+  for (const [date, minutes, nightMinutes, skills, conditions] of [
+    ["2026-10-24", "45", "0", ["Starting and stopping", "Parking"], ["Light traffic"]],
+    ["2026-10-19", "75", "0", ["Lane changes", "Turns"], ["City traffic"]],
+    ["2026-10-12", "50", "20", ["Intersections"], ["Residential roads", "Rain"]],
+  ]) {
+    await service.createDrive({ idToken: accounts.manager.token, spaceId, operationId: randomUUID(), date, minutes, nightMinutes, notes: "Fictional practice drive.", supervisorPresentUid: accounts.manager.uid, routeId, practicedSkills: JSON.stringify(skills), practicedConditions: JSON.stringify(conditions) });
+  }
 } finally {
   await deleteApp(app);
 }

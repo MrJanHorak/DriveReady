@@ -12,8 +12,8 @@ const routes = Object.freeze({
   "/v1/invitations/list": { action: "listInvitations", fields: ["spaceId", "cursor"] },
   "/v1/invitations/cancel-by-id": { action: "cancelInvitationById", fields: ["spaceId", "invitationId"] },
   "/v1/members/remove": { action: "removeMember", fields: ["spaceId", "memberUid"] },
-  "/v1/drives": { action: "createDrive", fields: ["spaceId", "operationId", "date", "minutes", "nightMinutes", "notes", "supervisorPresentUid"], optional: ["routeId"] },
-  "/v1/drives/edit": { action: "editDrive", fields: ["spaceId", "driveId", "operationId", "expectedRevision", "date", "minutes", "nightMinutes", "notes"] },
+  "/v1/drives": { action: "createDrive", fields: ["spaceId", "operationId", "date", "minutes", "nightMinutes", "notes", "supervisorPresentUid"], optional: ["routeId", "practicedSkills", "practicedConditions"] },
+  "/v1/drives/edit": { action: "editDrive", fields: ["spaceId", "driveId", "operationId", "expectedRevision", "date", "minutes", "nightMinutes", "notes"], optional: ["practicedSkills", "practicedConditions"] },
   "/v1/routes": { action: "createRoute", fields: ["spaceId", "operationId", "name", "start", "destination"], optional: ["geometry", "roadPolyline"] },
 });
 

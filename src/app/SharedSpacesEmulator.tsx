@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { readSharedMembers, readSharedSpaces, sharedAccessRequest } from "./sharedAccessEmulator";
 import SharedPracticeEmulator from "./SharedPracticeEmulator";
 import SharedRoutesEmulator from "./SharedRoutesEmulator";
+import SharedDashboard from "./SharedDashboard";
 
 type Space = { id: string; learnerName: string; role: string };
 type Preview = { learnerName: string; role: string; expiresAt: number };
@@ -33,6 +34,8 @@ export default function SharedSpacesEmulator({ uid, verified, disabled, onBusyCh
   const [busy, setBusy] = useState(false);
   const [routeRequest, setRouteRequest] = useState<{ spaceId: string; nonce: string } | null>(null);
   const [createdRoute, setCreatedRoute] = useState<{ spaceId: string; routeId: string; nonce: string } | null>(null);
+  const [logRequest, setLogRequest] = useState<{ spaceId: string; nonce: string } | null>(null);
+  const [dashboardSpace, setDashboardSpace] = useState("");
   const busyRef = useRef(false);
   const generation = useRef(0);
   const memberGeneration = useRef(0);
@@ -107,13 +110,17 @@ export default function SharedSpacesEmulator({ uid, verified, disabled, onBusyCh
     finally { busyRef.current = false; if (alive.current) setBusy(false); onBusyChange(false); }
   }
   const blocked = busy || disabled || !verified || uncertain;
-  return <section className="rounded-xl bg-card p-4 sm:p-5">
-    <h3 className="font-semibold">Shared spaces · local emulator only</h3>
+  const onDashboard = page === "dashboard";
+  // Dashboard and Routes lay out their own cards; other pages sit in one card.
+  const bare = onDashboard || page === "routes";
+  return <section className={bare ? "" : "rounded-2xl border border-border bg-card p-4 sm:p-5"}>
+    <h3 className={bare ? "sr-only" : "font-semibold"}>Shared spaces · local emulator only</h3>
     {!verified && <p className="mt-2 text-sm">Verify your email in the emulator to use this test.</p>}
     {status && <p role="status" className="mt-2 text-sm">{status}</p>}
-    <div className="mt-3 flex items-center gap-2"><button type="button" disabled={busy || disabled || !verified} className={button} onClick={() => { setStatus(""); void refresh(); void refreshMembers(); void refreshInvitations(); }}>Refresh spaces</button><span className="text-sm">{spaces.length} {spaces.length === 1 ? "space" : "spaces"}</span></div>
+    <div className={bare ? "mb-3 flex items-center justify-end gap-2 text-xs" : "mt-3 flex items-center gap-2"} hidden={onDashboard && spaces.length > 0}><button type="button" disabled={busy || disabled || !verified} className={button} onClick={() => { setStatus(""); void refresh(); void refreshMembers(); void refreshInvitations(); }}>Refresh spaces</button><span className="text-sm">{spaces.length} {spaces.length === 1 ? "space" : "spaces"}</span></div>
     {spaces.length === 0 && page !== "shared" && <p className="mt-3 text-sm">Add a learner in <button type="button" className="text-[#0C7A8D] underline" onClick={() => onNavigate("shared")}>People &amp; access</button> to get started.</p>}
-    <div hidden={page !== "dashboard" && page !== "logs"}><SharedPracticeEmulator uid={uid} spaces={spaces} blocked={blocked} run={run} createdRoute={createdRoute} onCreateRoute={(spaceId) => { onNavigate("routes"); setRouteRequest({ spaceId, nonce: crypto.randomUUID() }); }} /></div>
+    {onDashboard && <SharedDashboard uid={uid} spaces={spaces} blocked={blocked} onNavigate={onNavigate} preferredSpace={dashboardSpace} onSelect={setDashboardSpace} onLogDrive={(spaceId) => { setLogRequest({ spaceId, nonce: crypto.randomUUID() }); onNavigate("logs"); }} />}
+    <div hidden={page !== "logs"}><SharedPracticeEmulator uid={uid} spaces={spaces} blocked={blocked} run={run} createdRoute={createdRoute} logRequest={logRequest} onCreateRoute={(spaceId) => { onNavigate("routes"); setRouteRequest({ spaceId, nonce: crypto.randomUUID() }); }} /></div>
     <div hidden={page !== "routes"}><SharedRoutesEmulator uid={uid} spaces={spaces} blocked={blocked} run={run} createRequest={routeRequest} activePage={page === "routes"} onCreated={(spaceId, routeId) => { if (routeRequest?.spaceId === spaceId) { setCreatedRoute({ spaceId, routeId, nonce: crypto.randomUUID() }); setRouteRequest(null); onNavigate("logs"); } }} /></div>
     <div hidden={page !== "shared"}>
     <p className="mt-3 text-sm text-muted-foreground">Use fictional data. Invitations are not emailed.</p>
