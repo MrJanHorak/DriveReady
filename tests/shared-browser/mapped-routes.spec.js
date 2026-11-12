@@ -40,6 +40,7 @@ test("a new learner uses a drawn route before a drive can be logged", async ({ b
     await page.route("https://router.project-osrm.org/**", async (route) => {
       routingRequests += 1;
       if (routingRequests === 1) { firstRouteStarted(); await routeGate; }
+      if (routingRequests === 2) return route.fulfill({ status: 503, body: "Unavailable" });
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ code: "Ok", routes: [{ geometry: roadPolyline }] }) }).catch(() => {});
     });
     for (const path of ["/v1/routes", "/v1/drives"]) await page.route(`**${path}`, async (route) => route.fulfill({ response: await route.fetch({ url: `${base}${path}` }) }));
@@ -81,7 +82,7 @@ test("a new learner uses a drawn route before a drive can be logged", async ({ b
     await expect(page.getByText("3 / 50 points")).toBeVisible();
     await expect(drawing.locator("svg path").first()).toBeVisible();
     expect(routingRequests).toBe(0);
-    await page.getByRole("button", { name: "Follow roads" }).click();
+    await page.getByRole("button", { name: "Save shared route" }).click();
     await firstRoute;
     expect(routingRequests).toBe(1);
     await page.getByRole("button", { name: "Undo point" }).click();
@@ -90,9 +91,14 @@ test("a new learner uses a drawn route before a drive can be logged", async ({ b
     await expect(page.getByText("Points changed.", { exact: false })).toBeVisible();
     await drawing.click({ position: { x: 300, y: 200 } });
     await page.waitForTimeout(1050); // The public demo permits at most one routing request per second.
-    await page.getByRole("button", { name: "Follow roads" }).click();
+    await page.getByRole("button", { name: "Save shared route" }).click();
+    await expect(page.getByText("Could not find a road route.", { exact: false })).toBeVisible();
+    expect((await space.collection("routes").get()).size).toBe(1); // Only the older route exists.
+    await page.waitForTimeout(1050);
+    await page.getByRole("button", { name: "Save shared route" }).click();
     await expect(page.getByText("Road route found.", { exact: false })).toBeVisible();
-    expect(routingRequests).toBe(2);
+    expect(routingRequests).toBe(3);
+    expect((await space.collection("routes").get()).size).toBe(1); // Review precedes saving.
     await page.getByRole("button", { name: "Save shared route" }).click();
     await expect(page.getByText("Route selected. Add the practice details below.")).toBeVisible();
     await expect(page.getByLabel("Total minutes")).toHaveValue("35");

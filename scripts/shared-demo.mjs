@@ -30,7 +30,9 @@ try {
     await service.acceptInvitation({ idToken: accounts[role].token, spaceId, token: invitation.token });
   }
   const geometry = JSON.stringify([{ lat: 33.475, lng: -82.019 }, { lat: 33.475, lng: -82.014 }, { lat: 33.472, lng: -82.014 }, { lat: 33.472, lng: -82.009 }]);
-  const { routeId } = await service.createRoute({ idToken: accounts.manager.token, spaceId, operationId: randomUUID(), name: "Fictional neighborhood practice", start: "Example park", destination: "Example library", geometry });
+  // Fixed OSRM response for these fictional demo points; startup does not contact the routing provider.
+  const roadPolyline = "waikEzirsNiB_@UGSHQRcArAQPQHIBWAmBEaEGXiF^sJJw@ZmA@EJe@Po@VeAz@cDtAsFbCbA^N`DpAb@PhDpApB`AzBdApAiF|@^rDzACJVLZD\\@t@C\\?KcFLwFt@iDP}@BMJ_@Ni@Lg@Nk@Nm@q@Uu@W}BcAoAi@eDwA";
+  const { routeId } = await service.createRoute({ idToken: accounts.manager.token, spaceId, operationId: randomUUID(), name: "Fictional neighborhood practice", start: "Example park", destination: "Example library", geometry, roadPolyline });
   await service.createDrive({ idToken: accounts.supervisor.token, spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "60", nightMinutes: "15", notes: "Fictional practice: worked on turns and intersections.", supervisorPresentUid: accounts.supervisor.uid, routeId });
 } finally {
   await deleteApp(app);

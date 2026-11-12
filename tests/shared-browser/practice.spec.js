@@ -5,10 +5,13 @@ import { getFirestore } from "firebase-admin/firestore";
 import { randomUUID } from "node:crypto";
 const geometry = [{ lat: 33.47, lng: -82.01 }, { lat: 33.48, lng: -82.02 }];
 async function drawRoute(page) {
+  await page.route("https://router.project-osrm.org/**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ code: "Ok", routes: [{ geometry: "_p~iF~ps|U_ulLnnqC_mqNvxq`@" }] }) }));
   const map = page.getByRole("region", { name: "Route drawing map" });
   await map.click({ position: { x: 150, y: 120 } });
   await map.click({ position: { x: 230, y: 160 } });
   await expect(page.getByText("2 / 50 points")).toBeVisible();
+  await page.getByRole("button", { name: "Follow roads" }).click();
+  await expect(page.getByText("Road route found.", { exact: false })).toBeVisible();
 }
 
 test("a supervisor retries an uncertain save without duplication and the learner can read it", async ({ browser }) => {
@@ -118,7 +121,7 @@ test("a supervisor retries an uncertain save without duplication and the learner
     const routeList = learnerPage.getByRole("list", { name: "Shared routes" });
     const selectedRouteCard = routeList.locator("li").filter({ hasText: "Fictional loop" });
     await selectedRouteCard.locator("summary").click();
-    await expect(selectedRouteCard.getByText("Drawn route:", { exact: false })).toBeVisible();
+    await expect(selectedRouteCard.getByText("Suggested road route by", { exact: false })).toBeVisible();
     const routeDoc = (await space.collection("routes").where("name", "==", "Fictional loop").get()).docs[0];
     await routeDoc.ref.update({ name: "Renamed fictional loop" });
     await learnerPage.getByRole("button", { name: "Driving Logs", exact: true }).click();

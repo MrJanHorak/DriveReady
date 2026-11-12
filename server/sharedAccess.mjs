@@ -245,6 +245,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
         return { routeId: route.id, created: false };
       }
       if (!geometry) throw new Error("Draw a route with at least two map points.");
+      if (!roadPolyline) throw new Error("Find a road route before saving.");
       tx.create(route, { ...data, geometry, ...(roadPolyline ? { roadPolyline } : {}), createdAt: FieldValue.serverTimestamp() });
       return { routeId: route.id, created: true };
     });

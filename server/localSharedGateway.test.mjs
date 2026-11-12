@@ -76,7 +76,7 @@ test("gateway verifies accounts and invitation scope before granting access", as
   assert.equal((await post("/v1/invitations/accept", learner.token, { spaceId, token })).status, 200);
   assert.equal((await getDocFromServer(doc(learner.db, `spaces/${spaceId}`))).exists(), true);
   assert.equal((await post("/v1/invitations/accept", learner.token, { spaceId, token })).status, 403);
-  const route = await post("/v1/routes", manager.token, { spaceId, operationId: randomUUID(), name: "Fictional route", start: "Example start", destination: "Example end", geometry: JSON.stringify([{ lat: 33.47, lng: -82.01 }, { lat: 33.48, lng: -82.02 }]) });
+  const route = await post("/v1/routes", manager.token, { spaceId, operationId: randomUUID(), name: "Fictional route", start: "Example start", destination: "Example end", geometry: JSON.stringify([{ lat: 33.47, lng: -82.01 }, { lat: 33.48, lng: -82.02 }]), roadPolyline: "_p~iF~ps|U_ulLnnqC_mqNvxq`@" });
   assert.equal(route.status, 200);
   const drive = { spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "45", nightMinutes: "10", notes: "Synthetic notes", supervisorPresentUid: manager.uid, routeId: (await route.json()).routeId };
   assert.equal((await post("/v1/drives", learner.token, drive)).status, 403);
