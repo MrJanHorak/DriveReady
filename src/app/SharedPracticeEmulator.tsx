@@ -16,7 +16,7 @@ type Pending = { action: "createDrive"; body: CreateBody } | { action: "editDriv
 const field = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm";
 const button = "rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50";
 
-export default function SharedPracticeEmulator({ uid, spaces, blocked, run, createdRoute, logRequest, onCreateRoute }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void>; createdRoute: { spaceId: string; routeId: string; nonce: string } | null; logRequest?: { spaceId: string; nonce: string } | null; onCreateRoute: (spaceId: string) => void }) {
+export default function SharedPracticeEmulator({ uid, spaces, blocked, run, createdRoute, logRequest, visible = true, routesVersion = 0, onCreateRoute }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void>; createdRoute: { spaceId: string; routeId: string; nonce: string } | null; logRequest?: { spaceId: string; nonce: string } | null; visible?: boolean; routesVersion?: number; onCreateRoute: (spaceId: string) => void }) {
   const [selected, setSelected] = useState("");
   const [drives, setDrives] = useState<Drive[]>([]);
   const [cursor, setCursor] = useState<DocumentSnapshot | null>(null);
@@ -92,6 +92,28 @@ export default function SharedPracticeEmulator({ uid, spaces, blocked, run, crea
     } catch { if (active.current && request === routeGeneration.current) { setRouteId(""); setRouteError(true); } }
   }, [uid, selected]);
   useEffect(() => { void refreshRoutes(); }, [refreshRoutes]);
+  // Quietly pick up routes saved elsewhere (the Routes page, another member) when the
+  // page is shown or a route is saved. Unlike refreshRoutes it keeps the current selection.
+  const syncRoutes = useCallback(async () => {
+    if (!selected || loadingRoutesRef.current) return;
+    const request = routeGeneration.current;
+    try {
+      const result = await readSharedRoutes(uid, selected);
+      if (!active.current || request !== routeGeneration.current) return;
+      const fresh = result.routes as Route[];
+      setRoutes((existing) => [...fresh, ...existing.filter((route) => !fresh.some((item) => item.id === route.id))]
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)));
+      setRouteCursor((current) => current ?? result.cursor);
+      setRouteError(false);
+    } catch { /* keep the current list; the manual refresh reports errors */ }
+  }, [uid, selected]);
+  const wasVisible = useRef(visible);
+  useEffect(() => {
+    const becameVisible = visible && !wasVisible.current;
+    wasVisible.current = visible;
+    if (becameVisible) void syncRoutes();
+  }, [visible, syncRoutes]);
+  useEffect(() => { if (routesVersion > 0) void syncRoutes(); }, [routesVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!createdRoute || createdRoute.nonce === handledRoute.current || createdRoute.spaceId !== selected || pendingRef.current || editing) return;
     handledRoute.current = createdRoute.nonce;

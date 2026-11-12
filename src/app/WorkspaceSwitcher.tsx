@@ -28,7 +28,7 @@ export default function WorkspaceSwitcher({ page, onNavigate, onBusyChange }: { 
     setGeneration((value) => value + 1);
   }
   const showPractice = page === "dashboard" || page === "logs";
-  return <main className="flex-1 overflow-auto p-4 sm:p-6" style={{ display: page === "requirements" || (page === "routes" && !sharedAccessEnabled) ? "none" : undefined }}><div className="mx-auto max-w-6xl space-y-5">
+  return <main className="relative flex-1 overflow-auto p-4 sm:p-6" style={{ display: page === "requirements" || (page === "routes" && !sharedAccessEnabled) ? "none" : undefined }}><div className="mx-auto max-w-6xl space-y-5">
     {busy && <p role="status" className="rounded-lg bg-[#E4EFF2] p-3 text-sm text-[#095969]">Cloud operation in progress. Please wait before switching sections or signing out.</p>}
     <FirebaseAccount user={user} loading={authLoading} view={!user || page === "account" ? "account" : sharedAccessEnabled ? "shared" : "hidden"} page={page} onNavigate={onNavigate} disableSignOut={saving} onImportingChange={setImporting} />
     {!sharedAccessEnabled && user && showPractice && <section className="rounded-xl border border-[#0C7A8D]/20 bg-card p-4"><p className="text-sm font-semibold">Practice records: Cloud account</p><p className="mt-1 text-sm text-muted-foreground">{user.email} · Fictional data only · Connection required</p><button type="button" disabled={busy} className="mt-3 rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-50" onClick={refreshRecords}>Refresh cloud records</button></section>}

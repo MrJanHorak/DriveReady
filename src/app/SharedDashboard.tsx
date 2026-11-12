@@ -109,16 +109,18 @@ export default function SharedDashboard({ uid, spaces, blocked, onNavigate, onLo
     {state === "error" && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Could not load this learner’s practice. Check access and <button type="button" className="underline" onClick={() => void load()}>try again</button>.</p>}
     {partial && <p role="status" className="rounded-xl bg-[#E4EFF2] p-3 text-sm text-[#095969]">Showing the latest {drives.length} drives. Older drives are not included in these totals.</p>}
 
-    <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
+    <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
       <Card className="flex flex-col gap-5 p-5" aria-label="Hours progress">
         <div className="flex items-start justify-between gap-2">
           <div><h2 className="text-base font-bold" style={heading}>Hours progress</h2><p className="mt-0.5 text-xs text-muted-foreground">Supervised driving logged</p></div>
           {state === "ready" && <Badge>{hoursLeft > 0 ? <><AlertCircle size={9} aria-hidden="true" /> {hours(hoursLeft * 60)} hrs left</> : <><CheckCircle2 size={9} aria-hidden="true" /> 40 hrs logged</>}</Badge>}
         </div>
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:gap-10 xl:flex-col xl:items-stretch xl:gap-5">
         <div className="flex justify-center"><ProgressRing value={totals.total} max={TARGET_HOURS} /></div>
-        <div className="space-y-4">
+        <div className="space-y-4 md:flex-1">
           <ProgressBar label="Day driving" value={totals.day} max={TARGET_HOURS - TARGET_NIGHT_HOURS} colour="#0C7A8D" />
           <ProgressBar label="Night driving" value={totals.night} max={TARGET_NIGHT_HOURS} colour="#12B5C9" />
+        </div>
         </div>
         <div className="flex items-start gap-2 border-t border-border pt-3">
           <CheckCircle2 size={13} className="mt-0.5 flex-shrink-0 text-[#0C7A8D]" aria-hidden="true" />
@@ -130,7 +132,7 @@ export default function SharedDashboard({ uid, spaces, blocked, onNavigate, onLo
         <CardHeader title="Recent drives" subtitle={drives.length ? `Last ${Math.min(drives.length, 5)} supervised sessions` : "No drives logged yet"} action={<button type="button" className="flex items-center gap-1 text-xs font-medium text-[#0C7A8D] hover:underline" onClick={() => onNavigate("logs")}>View all <ChevronRight size={12} aria-hidden="true" /></button>} />
         {state === "loading" && <p className="px-5 pb-5 text-sm text-muted-foreground">Loading practice…</p>}
         {state === "ready" && !drives.length && <div className="flex flex-1 flex-col items-start gap-3 px-5 pb-5 text-sm text-muted-foreground"><p>When a supervisor logs a drive, it appears here with its route and the skills practised.</p>{canRecord && <button type="button" className={ghostButton} disabled={blocked} onClick={() => onLogDrive(selected)}><Plus size={14} aria-hidden="true" /> Log the first drive</button>}</div>}
-        {drives.length > 0 && <ul className="divide-y divide-border/60 border-t border-border sm:hidden" aria-label="Recent drives list">{drives.slice(0, 5).map((drive) => {
+        {drives.length > 0 && <ul className="divide-y divide-border/60 border-t border-border lg:hidden" aria-label="Recent drives list">{drives.slice(0, 5).map((drive) => {
           const tags = [...(drive.practicedSkills ?? []), ...(drive.practicedConditions ?? [])];
           return <li key={drive.id} className="space-y-1.5 px-5 py-3.5">
             <div className="flex items-baseline justify-between gap-3"><span className="text-sm font-medium text-foreground">{drive.routeSnapshot?.name ?? "Drive"}</span><span className="whitespace-nowrap text-xs text-muted-foreground" style={mono}>{formatDuration(drive.minutes)}</span></div>
@@ -138,7 +140,7 @@ export default function SharedDashboard({ uid, spaces, blocked, onNavigate, onLo
             {tags.length > 0 && <div className="flex flex-wrap gap-1.5">{tags.map((tag) => <SkillTag key={tag} label={tag} />)}</div>}
           </li>;
         })}</ul>}
-        {drives.length > 0 && <div className="hidden flex-1 overflow-x-auto sm:block">
+        {drives.length > 0 && <div className="hidden flex-1 overflow-x-auto lg:block">
           <table className="w-full text-sm">
             <thead><tr className="border-y border-border bg-muted/50">{["Date", "Route", "Duration", "Practised"].map((h) => <th key={h} scope="col" className="px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground" style={mono}>{h}</th>)}</tr></thead>
             <tbody>{drives.slice(0, 5).map((drive) => {
@@ -160,7 +162,7 @@ export default function SharedDashboard({ uid, spaces, blocked, onNavigate, onLo
       <div className="grid gap-5 p-5 md:grid-cols-2">
         {[{ title: "Skills", items: coverage.skills }, { title: "Roads and conditions", items: coverage.conditions }].map((group) => <div key={group.title}>
           <h3 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground" style={mono}>{group.title}</h3>
-          <ul className="flex flex-wrap gap-1.5">{group.items.map((item) => <li key={item.label} title={item.count ? `${item.count} ${item.count === 1 ? "drive" : "drives"}` : "Not practised yet"}><SkillTag label={item.label} count={item.count} muted={!item.count} /><span className="sr-only">{item.count ? `, ${item.count} drives` : ", not practised yet"}</span></li>)}</ul>
+          <ul className="flex flex-wrap gap-1.5">{group.items.map((item) => <li key={item.label} className="relative" title={item.count ? `${item.count} ${item.count === 1 ? "drive" : "drives"}` : "Not practised yet"}><SkillTag label={item.label} count={item.count} muted={!item.count} /><span className="sr-only">{item.count ? `, ${item.count} ${item.count === 1 ? "drive" : "drives"}` : ", not practised yet"}</span></li>)}</ul>
         </div>)}
       </div>
     </Card>}

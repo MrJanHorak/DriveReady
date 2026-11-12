@@ -1110,7 +1110,7 @@ export default function App() {
 
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
-  return <div className="flex h-screen w-screen overflow-hidden bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
+  return <div className="relative flex h-full w-full overflow-hidden bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
     <aside className="flex w-16 flex-shrink-0 flex-col border-r border-border bg-card sm:w-[228px]">
       <div className="flex h-16 items-center gap-2.5 border-b border-border px-4 sm:px-5">
         <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#0C7A8D] to-[#12B5C9]"><Navigation size={14} className="text-white" aria-hidden="true" /></div>
