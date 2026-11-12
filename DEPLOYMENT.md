@@ -14,7 +14,7 @@ Browser (DriveReady web app)
                                   └─ Firebase Admin SDK ──► Firestore writes
 ```
 
-The service is one Node process with no framework. It runs on any Node 20+ host. The repository includes `railway.json` for Railway; the same steps work on Render or Cloud Run.
+The service is one Node process with no framework. It runs on any Node 22+ host (the Firebase Admin SDK requires Node 22). The repository includes `railway.json` for Railway; the same steps work on Render or Cloud Run.
 
 ## Before you start
 

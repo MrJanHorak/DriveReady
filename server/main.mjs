@@ -1,5 +1,5 @@
 // Deployable entry point for the shared-space service (Railway, Render, Cloud Run,
-// or any Node 20+ host). Configuration comes from environment variables; see
+// or any Node 22+ host). Configuration comes from environment variables; see
 // DEPLOYMENT.md. Run with: npm run start:service
 import { createServer } from "node:http";
 import { applicationDefault, cert, initializeApp } from "firebase-admin/app";

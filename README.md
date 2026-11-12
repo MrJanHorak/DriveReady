@@ -16,7 +16,7 @@ Shared spaces run in two ways: in the **local demo** (`npm run demo:shared`) wit
 
 ## Prerequisites
 
-- Node.js 20 or newer and npm
+- Node.js 22 or newer and npm (the Firebase Admin SDK requires 22)
 - For the demo and most tests: [Firebase CLI](https://firebase.google.com/docs/cli) (`npm install -g firebase-tools`) and **Java 21 or newer**
 - For browser tests: Google Chrome
 
