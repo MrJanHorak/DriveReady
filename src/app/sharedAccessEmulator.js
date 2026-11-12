@@ -1,17 +1,36 @@
 import { collection, doc, getDocFromServer, getDocsFromServer, limit, orderBy, query, startAfter } from "firebase/firestore";
 import { auth, db } from "./firebaseClient";
 
-// This prototype cannot target a live Firebase project or a non-local service.
-export const sharedAccessEmulatorEnabled = import.meta.env.DEV &&
+import { firebaseConfigured } from "./firebaseClient";
+
+// Local demo: emulators plus the loopback gateway started by npm run demo:shared.
+export const sharedAccessDemo = import.meta.env.DEV &&
   import.meta.env.VITE_SHARED_ACCESS_EMULATOR === "true" &&
   import.meta.env.VITE_FIREBASE_USE_EMULATORS === "true" &&
   import.meta.env.VITE_FIREBASE_PROJECT_ID === "demo-driveready";
 
-const gateway = import.meta.env.VITE_SHARED_GATEWAY_PORT === "4176" ? "http://127.0.0.1:4176" : "http://127.0.0.1:4175";
+// Hosted service (server/main.mjs). https is required except for a service on this computer.
+function hostedServiceUrl(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  try {
+    const url = new URL(value.trim());
+    const local = ["localhost", "127.0.0.1"].includes(url.hostname);
+    if ((url.protocol !== "https:" && !(local && url.protocol === "http:")) || url.search || url.hash || url.username || url.password) return "";
+    return url.href.replace(/\/+$/, "");
+  } catch { return ""; }
+}
+const hostedService = sharedAccessDemo ? "" : hostedServiceUrl(import.meta.env.VITE_SHARED_API_URL);
+export const sharedServiceMisconfigured = !sharedAccessDemo && !!import.meta.env.VITE_SHARED_API_URL && !hostedService;
+
+// Shared learner spaces are on in the demo, or when a hosted service is configured
+// (server/main.mjs, or the same service against the emulators for local testing).
+export const sharedAccessEnabled = sharedAccessDemo || (!!hostedService && firebaseConfigured);
+
+const gateway = sharedAccessDemo ? (import.meta.env.VITE_SHARED_GATEWAY_PORT === "4176" ? "http://127.0.0.1:4176" : "http://127.0.0.1:4175") : hostedService;
 const paths = Object.freeze({ createSpace: "/v1/spaces", createInvitation: "/v1/invitations", previewInvitation: "/v1/invitations/preview", acceptInvitation: "/v1/invitations/accept", removeMember: "/v1/members/remove", listInvitations: "/v1/invitations/list", cancelInvitationById: "/v1/invitations/cancel-by-id", createDrive: "/v1/drives", editDrive: "/v1/drives/edit", createRoute: "/v1/routes" });
 
 function currentUser(uid) {
-  if (!sharedAccessEmulatorEnabled || !auth || !db || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error("Shared-space emulator is unavailable.");
+  if (!sharedAccessEnabled || !auth || !db || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error("Shared spaces are unavailable.");
   return auth.currentUser;
 }
 

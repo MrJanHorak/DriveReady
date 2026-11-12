@@ -1,6 +1,6 @@
 # DriveReady product plan
 
-Working plan, updated November 2, 2026. This captures the product vision and the user's current direction; details still marked as decisions are not a fixed specification. The selected first pilot is the Augusta, Georgia area.
+Working plan, updated November 2, 2026 (engineering status updated November 11, 2026). This captures the product vision and the user's current direction; details still marked as decisions are not a fixed specification. The selected first pilot is the Augusta, Georgia area.
 
 ## Vision
 
@@ -88,4 +88,4 @@ The proposed role model, invitation boundaries, and migration requirements are d
 
 ## Engineering starting point
 
-The Figma-derived interface includes sample routes. The Firebase development project supports an early single-supervisor account workspace. A separate, fictional-data-only local emulator prototype now supports shared spaces, invitations, mapped private route descriptions, and route-linked practice. It can optionally request a road-following suggestion from a public routing demo; this is not production routing or navigation. Community routes, voting, reporting, and deployed shared access remain unimplemented. See [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md), [FIREBASE_SETUP.md](FIREBASE_SETUP.md), and [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for implementation limits and security work; [PROJECT_STATUS.md](PROJECT_STATUS.md) is an earlier dated assessment. Preserve the prototype as a design reference while replacing simulated actions with real behavior.
+Updated November 11, 2026. The shared learner-space model is implemented: spaces, invitations, mapped routes snapped to roads, route-linked drives with skills and conditions, and a dashboard in the original Figma style. It runs in the local demo and against a real project once the shared service is hosted ([DEPLOYMENT.md](DEPLOYMENT.md)). The older single-supervisor workspace remains as the fallback for `npm run dev` until the service is hosted on the development project. Community routes, voting, reporting and moderation are not implemented. Routing uses the public OSRM demo and is not navigation. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for current status and next steps, [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md) for the access model, and [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for what must be resolved before real family data.

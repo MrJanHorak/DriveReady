@@ -1,19 +1,21 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "driveready",
   "private": true,
   "version": "0.0.1",
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "test": "node --test src/app/familyData.test.js",
+    "test": "node --test src/app/familyData.test.js src/app/routePolyline.test.js server/config.test.mjs server/sharedGateway.test.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-driveready \"node --test src/app/firestore.rules.test.js\"",
     "test:firebase": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node --test src/app/firebase.integration.test.js\"",
-    "test:shared": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node --test server/sharedAccess.test.mjs server/localSharedGateway.test.mjs\"",
+    "test:shared": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node --test server/sharedAccess.test.mjs server/localSharedGateway.test.mjs server/main.test.mjs\"",
     "test:shared:browser": "firebase emulators:exec --only auth,firestore --project demo-driveready \"playwright test --config playwright.shared.config.js\"",
     "test:browser": "firebase emulators:exec --only auth,firestore --project demo-driveready \"playwright test\"",
     "test:live:dev": "playwright test --config playwright.live.config.js",
     "demo:shared": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node scripts/shared-demo.mjs\"",
-    "dev": "vite"
+    "dev": "vite",
+    "start:service": "node server/main.mjs",
+    "check:service": "node --check server/main.mjs && node --check server/sharedGateway.mjs && node --check server/config.mjs && node --check server/sharedAccess.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -54,6 +56,7 @@
     "date-fns": "3.6.0",
     "embla-carousel-react": "8.6.0",
     "firebase": "^11.10.0",
+    "firebase-admin": "^14.5.0",
     "input-otp": "1.4.2",
     "leaflet": "^1.9.4",
     "lucide-react": "0.487.0",
@@ -78,7 +81,6 @@
     "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "4.1.12",
     "@vitejs/plugin-react": "4.7.0",
-    "firebase-admin": "^14.5.0",
     "tailwindcss": "4.1.12",
     "vite": "6.4.5"
   },
@@ -104,5 +106,8 @@
       "vite": "6.4.5",
       "@firebase/firestore>@grpc/grpc-js": "^1.14.7"
     }
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -18,6 +18,10 @@ test-results/
 logs/
 *.log
 
+# Service-account keys must never be committed
+*service-account*.json
+*serviceAccount*.json
+
 # Local editor and operating system files
 .DS_Store
 Thumbs.db
@@ -25,5 +29,8 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
-# Original exported design archives
+# Original exported design archives and temporary source archives
 *.zip
+*.tgz
+*.tar.gz
+firebase-adminsdk.json

@@ -1,10 +1,17 @@
 # Firebase development plan
 
+Updated November 11, 2026.
+
 Firebase Authentication and Cloud Firestore have been selected for DriveReady. A dedicated development project, `driveready-dev-jh-261102` (DriveReady Development), is configured with a registered web app, email/password sign-in, and a default Firestore Standard database in `us-east1`. The rules in this repository were deployed to that development project on November 2, 2026. This project is for synthetic test data; no production project has been configured by this repository.
 
 ## Current status
 
-For a local, fictional shared-space demonstration, run `npm run demo:shared` after installing Firebase CLI, Java 21+, and the project dependencies. The command seeds three verified emulator accounts and a shared drive, and starts the local gateway and app. See [README.md](README.md#try-the-shared-family-prototype) for credentials, ports, and walkthrough. This does not deploy or use the development project; data is discarded on shutdown.
+DriveReady now has two modes:
+
+- **Shared learner spaces** (the direction of the product). They run in the local demo (`npm run demo:shared`, see [README.md](README.md#run-the-shared-demo-recommended)), which seeds verified emulator accounts, a road-following route and tagged drives and never touches the development project. They also run against a real project once the shared service (`server/main.mjs`) is hosted and `VITE_SHARED_API_URL` is set; [DEPLOYMENT.md](DEPLOYMENT.md) has the steps. Clients only read shared data; the service performs all writes with the Admin SDK.
+- **Single-supervisor workspace** (described below). This is what `npm run dev` shows when `VITE_SHARED_API_URL` is not set. It will be retired once shared mode runs on the development project.
+
+Before using shared mode on the development project, redeploy the rules in this repository (`firebase deploy --only firestore:rules --project <project-id>`). They add read-only access for active members of a space. The rules last deployed on November 2, 2026 may predate them.
 
 With Firebase configuration, practice records require sign-in and the app opens the account-scoped cloud workspace automatically. It reads from Firestore and can create learners and create or edit logs; writes use transactions, and conflicting edits are rejected. Cloud reads require a connection and changes from another device require a manual refresh. Signing out removes account records from the displayed workspace. The former browser-local workspace is no longer shown or offered as a storage mode; existing browser data is not automatically copied or deleted and remains accessible to someone with access to that browser profile outside this UI.
 
@@ -19,14 +26,14 @@ Cloud writes have stricter limits than the existing backup parser, including fie
 - A supervisor authenticates with Firebase Authentication.
 - A supervisor's initial private records live under `users/{uid}/learners/{learnerId}` and `users/{uid}/drives/{driveId}`. Store records separately so edits do not overwrite a whole household or hit Firestore's single-document size limit.
 - The first version is single-supervisor only. Family invitations, learner access, community routes, and sharing require an explicit membership model and separate authorization rules before being enabled.
-- [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md) describes the learner-centered membership model and migration requirements. A read-only rules foundation, trusted-service prototype, and opt-in emulator-only screen exist locally; they are not deployed. The deployed `users/{uid}` rules do not grant shared access.
+- [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md) describes the learner-centred membership model. Its read-only rules, trusted service and screens are implemented and tested. The service can be hosted ([DEPLOYMENT.md](DEPLOYMENT.md)) but has not been deployed. The `users/{uid}` rules do not grant shared access.
 - Do not silently copy or delete older browser-local records. A selected backup file can be reviewed and copied into the account; it does not overwrite conflicting records.
 - Design for failed or pending writes, multi-device conflicts, logout, backup/export, and privacy of location history. Do not report a change as saved until the appropriate persistence result is known.
 
 ## Next implementation steps
 
-1. The Firebase web SDK is installed. This workspace's ignored `.env.development.local` targets the development project when running `npm run dev`; it is not included in production builds. For emulator tests use a `demo-` project ID and set `VITE_FIREBASE_USE_EMULATORS=true`; never use emulator mode for a real project. A separate production configuration and project have not been created.
-2. Run `npm run test:rules`, `npm run test:firebase`, `npm run test:shared`, and `npm run test:browser` with Firebase CLI and Java 21+ installed. Browser tests use installed Google Chrome, local emulators, and synthetic records. On this machine, Android Studio's bundled Java 25 can be put first in `PATH` for these commands. Review the rules and reconcile cloud validation with local backup and import validation before production.
+1. The Firebase web SDK is installed. This workspace's ignored `.env.development.local` targets the development project when running `npm run dev`; it is not included in production builds. Add `VITE_SHARED_API_URL` there to use a hosted shared service. For emulator tests use a `demo-` project ID and set `VITE_FIREBASE_USE_EMULATORS=true`; never use emulator mode for a real project. A separate production configuration and project have not been created.
+2. Run `npm run test:rules`, `npm run test:firebase`, `npm run test:shared`, and `npm run test:browser` with Firebase CLI and Java 21+ installed. Browser tests use installed Google Chrome, local emulators, and synthetic records. If an older Java is found first on `PATH`, see [Java on Windows](README.md#java-on-windows). Review the rules and reconcile cloud validation with local backup and import validation before production.
 3. Account-scoped cloud editing uses explicit mode selection, server-confirmed writes, and conflict checks. If a save fails or its outcome is uncertain, the form remains visible and cloud writes are blocked until the user refreshes and checks the server copy; refreshing closes the form. A browser close warning is best effort and cannot prevent a crash or forced close.
 4. The early import preview preserves local data, skips identical records, and reports collisions. Browser tests cover a server rejection and a simulated offline transition after an earlier record was copied. Expand diagnostics for malformed backup data and continue checking parity between rules and client validation.
 5. Obtain independent security and privacy review, decide production backup and recovery, and create a separate production project only when ready. Verify region and billing settings for that project. Email/password signup is enabled in the development project; keep real family data out of it.

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import StateRequirements from "./StateRequirements";
-import { sharedAccessEmulatorEnabled } from "./sharedAccessEmulator";
+import { sharedAccessEnabled } from "./sharedAccessEmulator";
 import {
   LayoutDashboard,
   Map,
@@ -1105,7 +1105,7 @@ export default function App() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [wizardOpen, setWizardOpen] = useState(false);
   const [familyBusy, setFamilyBusy] = useState(false);
-  const workspaceNav = [...(sharedAccessEmulatorEnabled ? navItems.map((item) => item.id === "routes" ? { ...item, label: "Routes" } : item) : navItems), ...(sharedAccessEmulatorEnabled ? [{ id: "shared", label: "People & access", icon: <Users size={17} /> }] : []), { id: "account", label: "Account", icon: <UserCircle2 size={17} /> }];
+  const workspaceNav = [...(sharedAccessEnabled ? navItems.map((item) => item.id === "routes" ? { ...item, label: "Routes" } : item) : navItems), ...(sharedAccessEnabled ? [{ id: "shared", label: "People & access", icon: <Users size={17} /> }] : []), { id: "account", label: "Account", icon: <UserCircle2 size={17} /> }];
   const title = workspaceNav.find((item) => item.id === activeNav)?.label ?? "Dashboard";
 
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
@@ -1126,8 +1126,8 @@ export default function App() {
     </aside>
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <header className="flex h-16 flex-shrink-0 items-center border-b border-border bg-card px-5 sm:px-6"><div><h1 className="text-lg font-bold leading-none text-foreground" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{title}</h1><p className="mt-1 text-xs text-muted-foreground">{today}</p></div></header>
-      {activeNav === "routes" && !sharedAccessEmulatorEnabled && <>
-        <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900"><strong>Design preview:</strong> These Augusta-area routes, maps, ratings, and safety notes are fictional examples. They are not location-aware or suitable for navigation. Route creation is a preview and does not save or publish.</div>
+      {activeNav === "routes" && !sharedAccessEnabled && <>
+        <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900"><strong>Design preview:</strong> These Augusta-area routes, maps, ratings, and safety notes are fictional examples. They are not location-aware or suitable for navigation. Route creation is a preview and does not save or publish. The working route editor (Leaflet map, road snapping, saved routes) runs in the shared demo (<code className="rounded bg-amber-100 px-1">npm run demo:shared</code>, then http://127.0.0.1:4173/) or here once <code className="rounded bg-amber-100 px-1">VITE_SHARED_API_URL</code> points to a hosted shared service (see DEPLOYMENT.md).</div>
         <RouteExplorer onPublish={() => setWizardOpen(true)} />
       </>}
       {activeNav === "requirements" && <StateRequirements />}

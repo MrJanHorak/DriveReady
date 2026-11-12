@@ -1,6 +1,6 @@
 # Shared learner space: proposed access design
 
-Working design, November 2, 2026. A local, read-only Firestore rules foundation and an emulator-only shared-space prototype are implemented and tested for the paths below. The prototype can create and list spaces, create, review, and accept test invitations, and let a manager review and remove members. Client writes remain denied, and neither the service nor these rules has been deployed. The normal application and existing development project still use single-supervisor records under `users/{uid}`. Use synthetic data only until security and privacy review is complete.
+Working design, November 2, 2026; status updated November 11, 2026. The model below is implemented and tested for the paths shown. The pieces are the read-only Firestore rules, the trusted service (`server/sharedAccess.mjs`), and the app screens: dashboard, routes, driving logs, and people & access. The service runs either as the local demo gateway or as a deployable server (`server/main.mjs`, see [DEPLOYMENT.md](DEPLOYMENT.md)). It has not been deployed, and client writes remain denied. Without a configured service, the app and the development project still use single-supervisor records under `users/{uid}`. Use synthetic data only until security and privacy review is complete.
 
 ## Product requirements
 
@@ -62,7 +62,16 @@ Membership and invitation creation, acceptance, cancellation, and removal requir
 
 Do not use an email address typed into the UI alone as proof that the intended person controls the account. Specify and test how verified account identity and invitation delivery work before building the flow, including account recovery and protections against replay, forwarding, enumeration, and expired or revoked invitations. No invitation emails are sent by this design.
 
-### Local prototype status
+### Implementation status
+
+**November 11, 2026 update.**
+- `server/sharedGateway.mjs` is now the single HTTP handler. The local gateway wraps it with loopback and emulator-only checks. `server/main.mjs` wraps it for hosting with an exact origin allow-list, an in-memory per-client rate limit, startup checks on its settings, and request logs that record no content.
+- When `VITE_SHARED_API_URL` points at a hosted service, the app switches to shared spaces against the configured Firebase project. Demo-only wording appears only in the local demo.
+- Drives can record skills and road conditions from the existing catalogue (`src/app/practiceData.js`). The service accepts only catalogue labels, stores them in catalogue order, includes them in retry and edit conflict checks, and replaces them on edit.
+- The dashboard totals up to 1,000 drives per learner.
+
+The earlier notes below remain accurate unless they say "local only" for something listed above.
+
 
 `server/sharedAccess.mjs` contains trusted server-side logic, exercised only through the Auth and Firestore emulators by `npm run test:shared`. It verifies Firebase ID tokens and current account status, requires verified matching email addresses, creates a manager's learner space and discovery link atomically, and issues one-time 48-hour invitations using random tokens whose hashes—not raw tokens—are stored. A verified intended recipient can preview the learner name, role, and expiry without gaining access; acceptance rechecks the invitation. A manager can cancel a pending invitation or remove a member. Removal deactivates membership, removes the discovery link, and invalidates **all pending invitations in that space** atomically, including invitations addressed to a member's changed email. Other pending invitees must be re-invited; this conservative behavior needs clear UI before use. A learner slot remains associated with the same learner account after removal; transferring it is not implemented. Expiry is checked using the server clock when the transaction runs.
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentSnapshot } from "firebase/firestore";
-import { readSharedDrives, readSharedRoutes, readSharedRoute, sharedAccessRequest } from "./sharedAccessEmulator";
+import { readSharedDrives, readSharedRoutes, readSharedRoute, sharedAccessRequest, sharedAccessDemo } from "./sharedAccessEmulator";
 import SharedRouteCard from "./SharedRouteCard";
 import type { RoutePoint } from "./RouteMap";
 import { PracticeChoices } from "./PracticeCoverage";
@@ -173,7 +173,7 @@ export default function SharedPracticeEmulator({ uid, spaces, blocked, run, crea
   }
   if (!spaces.length && !pending) return null;
   return <section className="mt-4 rounded-lg bg-card p-3 text-sm">
-    <h4 className="text-base font-bold" style={heading}>Shared practice · local emulator</h4>
+    <h4 className="text-base font-bold" style={heading}>{sharedAccessDemo ? "Shared practice · local emulator" : "Shared practice"}</h4>
     <p className="mt-1 text-muted-foreground">Practice notes are visible to everyone in this learner’s space.</p>
     <label className="mt-3 block">Practice learner<select className={`${field} mt-1`} value={selected} disabled={blocked || !!pending} onChange={(event) => { if (event.target.value === selected) return; if ((date || minutes || notes || routeId || skills.length || conditions.length) && !window.confirm("Discard the current unsaved practice form and switch learners?")) return; generation.current += 1; routeGeneration.current += 1; setDrives([]); setCursor(null); setHistoryLoaded(false); setRoutes([]); setRouteCursor(null); resetForm(); setRouteNotice(""); setSelected(event.target.value); setMessage(""); }}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.learnerName} · {item.role}</option>)}</select></label>
     <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><h5 className="font-semibold">Practice history</h5><div className="flex gap-2"><button type="button" className={button} disabled={blocked || !selected} onClick={() => void refreshHistory()}>Refresh practice history</button>{canRecord && !formOpen && <button type="button" className={primaryButton} disabled={blocked} onClick={() => setFormOpen(true)}>Log a drive</button>}</div></div>

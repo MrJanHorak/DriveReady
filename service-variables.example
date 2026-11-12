@@ -1,0 +1,20 @@
+# Settings for the hosted shared service (npm run start:service). Set these as
+# environment variables on your host (e.g. Railway → Variables). Never commit real values.
+
+# Firebase project ID, the same one the web app uses.
+FIREBASE_PROJECT_ID=
+
+# Service-account key JSON for that project, pasted whole or base64-encoded.
+# Leave empty on Google Cloud (Cloud Run/Functions) or when GOOGLE_APPLICATION_CREDENTIALS is set.
+FIREBASE_SERVICE_ACCOUNT=
+
+# Exact web app origins allowed to call the service, comma-separated, no trailing slash.
+# Include http://localhost:5173 to use it from npm run dev.
+ALLOWED_ORIGINS=http://localhost:5173
+
+# Set to true behind a platform proxy (Railway, Render, Cloud Run) so rate limiting
+# uses the client address the proxy reports.
+TRUST_PROXY=true
+
+# Optional: requests per minute per client address (default 120). PORT is set by the host.
+# RATE_LIMIT_PER_MINUTE=120

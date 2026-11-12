@@ -1,35 +1,48 @@
-
 # DriveReady
 
-DriveReady is a desktop web prototype for helping supervisors and learner drivers plan practice drives, discover routes, and track progress toward licensing requirements. The current project is a Figma-generated React interface with sample data; it is not yet a production driving log or a source of verified legal guidance.
+DriveReady helps families and other supervisors guide learner drivers: plan practice routes on a map, log supervised drives with the skills and conditions practised, and track progress toward Georgia's supervised-driving hours. The first pilot area is Augusta, Georgia.
 
-## Getting started
+It is a working prototype. Use fictional data only: security and privacy review is still needed before real family data (see [SECURITY_REVIEW.md](SECURITY_REVIEW.md)). Logs are a personal record, not official certification, and DriveReady does not give legal or navigation guidance.
 
-Prerequisites: Node.js and npm. Install the dependencies and start the development server:
+## What works today
 
-```sh
-npm ci
-npm run dev
-```
+- **Shared learner spaces.** A managing supervisor creates a space for each learner and invites other supervisors and the learner. Invitations are one-time codes that you pass on yourself; nothing is emailed.
+- **Dashboard** in the original Figma style: hours toward Georgia's 40 hours (6 at night), recent drives, skill and condition coverage with a suggestion of something new to try, and saved routes.
+- **Routes:** draw a route on a Leaflet/OpenStreetMap map, snap it to roads (OSRM), review it, and save it to the learner's space. Saved routes appear in a list next to a large map.
+- **Driving logs:** log a drive against a saved route, with date, minutes, night minutes, skills, road conditions and shared notes. Managers can correct any entry; supervisors can correct their own.
+- **State requirements:** a sourced Georgia DDS overview with links. Other states are not covered yet.
 
-Open the local address printed by Vite. Run `npm run build` to check the production build and `npm test` for the family-data checks. Lint and type-check scripts are not yet configured.
+Shared spaces run in two ways: in the **local demo** (`npm run demo:shared`) with no setup beyond the emulators, or with **plain `npm run dev`** once the shared service is hosted (see [DEPLOYMENT.md](DEPLOYMENT.md)). Without a hosted service, `npm run dev` shows the older single-supervisor workspace and a design-preview route explorer with sample data.
 
-For the Firebase emulator browser tests, install the Firebase CLI and Java 21 or newer, ensure Google Chrome is installed, then run `npm run test:browser`. The test starts Vite and the Auth and Firestore emulators with a demo project and synthetic data. See [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for the other emulator tests and limitations.
+## Prerequisites
 
-## Try the shared family prototype
+- Node.js 20 or newer and npm
+- For the demo and most tests: [Firebase CLI](https://firebase.google.com/docs/cli) (`npm install -g firebase-tools`) and **Java 21 or newer**
+- For browser tests: Google Chrome
 
-Install the project dependencies, Firebase CLI, and Java 21 or newer, then run `npm run demo:shared` from this directory. Keep that terminal open. Once it says Vite is ready, open [http://127.0.0.1:4173/](http://127.0.0.1:4173/). The sign-in panel should say **Shared local demo**. The ordinary `npm run dev` server uses a different account store, so these demo accounts will not work there. Sign in using any of these fictional, already verified accounts:
+Install dependencies once with `npm ci`.
 
-If Firebase reports an older Java version on Windows and Android Studio is installed at its default location, run these commands in the same PowerShell window before starting the demo:
+### Java on Windows
+
+The Firebase emulators use the first `java` on your `PATH`. If `java -version` still reports an older version after installing JDK 21, run `where.exe java` to see which one wins. Oracle's installer often puts `C:\Program Files\Common Files\Oracle\Java\javapath` first.
+
+To fix it for the current PowerShell window only (Temurin 21 shown; adjust the folder for other JDKs):
 
 ```powershell
-$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+$env:JAVA_HOME = (Get-ChildItem 'C:\Program Files\Eclipse Adoptium' -Directory | Where-Object Name -like 'jdk-21*' | Select-Object -First 1).FullName
 $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 java -version
+```
+
+To fix it permanently, open **Edit the system environment variables → Environment Variables**. Move the JDK 21 `bin` folder above the Oracle `javapath` entry in the system `Path`, or remove that entry, and set `JAVA_HOME` to the JDK folder. Then close every terminal, including those inside your editor, and open a new one.
+
+## Run the shared demo (recommended)
+
+```sh
 npm run demo:shared
 ```
 
-`java -version` should report version 21 or newer. These settings last only for that PowerShell window; other machines can instead point `JAVA_HOME` to their own JDK 21+ installation.
+Keep the terminal open. When Vite reports it is ready, open <http://127.0.0.1:4173/>. The sign-in panel should say **Shared local demo**. Sign in with any of these fictional, already-verified accounts:
 
 | Role | Email | Password |
 | --- | --- | --- |
@@ -37,29 +50,59 @@ npm run demo:shared
 | Invited supervisor | `supervisor@example.test` | `fictional-drive-123` |
 | Learner | `learner@example.test` | `fictional-drive-123` |
 
-Use **Show password** to check the password as you type. If sign-in fails, confirm the terminal is still running and the page says **Shared local demo**, then check the email and password. Reload the demo address after restarting the command.
+The demo seeds one learner ("Alex Example"), a road-following route and a few tagged drives. Things to try:
 
-After signing in, use **People & access** to add a fictional learner or manage invitations. The **Dashboard** shows the chosen learner's logged hours against the 40-hour (6 at night) Georgia DDS description, recent drives, skill and condition coverage, and saved routes; **Log a drive** there opens the drive form for that learner. Drives can record the skills and road conditions practised. Open **Driving Logs**, choose the learner and select **Log a drive**. Choose a mapped route, or select **Create a route** to trace one on the map; after it saves, the route is selected and the practice draft is preserved. **Routes** shows saved routes, and each drive shows the route and map saved with it. Use **Account** to sign out and try the learner account. Invitations are not emailed. The demo now uses shared spaces for its dashboard and driving logs; older account-only records have not been migrated or deleted.
+1. **Dashboard:** switch learners and check progress, recent drives and coverage. **Log a drive** opens the drive form for that learner.
+2. **Routes:** click a saved route to see it on the large map. Under **Create a route**, click the map to add points, select **Follow roads**, review the line, name it and save.
+3. **Driving Logs:** log a drive against a saved route and tick the skills and conditions practised.
+4. **People & access:** add another fictional learner, invite someone, or remove a member.
+5. **Account:** sign out and sign in as the learner (read-only) or the invited supervisor.
 
-Use fictional data only. The command starts local Auth and Firestore emulators, the local shared gateway, and Vite; it does not connect to the development Firebase project. Ports 4000, 4173, 4175, 8080, and 9099 must be free. Press Ctrl+C to stop. Emulator data is temporary and is recreated on each run. Supervisors can correct their own shared entries, and the manager can correct any entry; date, minutes, and notes can be changed. Load older drives to include them in the displayed totals; refresh the history to pick up concurrent changes. New routes use points chosen on the map. Selecting **Follow roads**, or saving before a road route has been found, sends those points to the public OSRM demo. Review the suggested line and then save; if the service cannot find a route, the route cannot be saved. Earlier routes remain readable. The result is not navigation. The public routing demo is free for reasonable non-commercial testing, limited to one request per second, and has no availability guarantees; see the [OSRM demo policy](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server). For a real launch, assess a paid hosted routing provider or self-hosting OSRM (software is open source, but hosting, maintenance, and scaling cost money); map tiles have separate costs and terms. OSRM uses mapped road restrictions, including one-way streets, but map data can be incomplete or outdated. Follow signs and review the actual road. Older text-only routes remain visible but cannot be selected for a new drive. Map tiles from OpenStreetMap disclose the viewed area to that provider and need an internet connection. A linked drive keeps a snapshot of the mapped route from when it was logged. Changing a drive's route or reported supervisor, migration, recovery, and deployment are not implemented.
+The demo starts local Auth and Firestore emulators, the local shared gateway and Vite. Nothing is sent to your Firebase project, and all data is discarded when you press Ctrl+C. Ports 4000, 4173, 4175, 8080 and 9099 must be free. Restart the command, then reload the page if sign-in fails.
 
-The map tile URL can be configured with `VITE_MAP_TILE_URL` for an appropriate OpenStreetMap-compatible tile provider. The local demo defaults to the public OpenStreetMap tile service and displays its attribution. Review the provider's terms, availability, privacy, and capacity before any non-demo use; see the [OpenStreetMap tile policy](https://operations.osmfoundation.org/policies/tiles/).
+## Run against your Firebase project
 
-## Current state
+`npm run dev` uses `.env.development.local` (copy [.env.example](.env.example) and fill in your project's web app settings). To get the shared spaces, dashboard and route editor there, host the shared service and set `VITE_SHARED_API_URL`; [DEPLOYMENT.md](DEPLOYMENT.md) walks through it on Railway. Without that setting you get the older single-supervisor workspace, which stores learners and drives under each account. It is kept only until the shared version replaces it.
 
-The normal workspace requires an account and stores its learners and manually entered drives in the configured cloud project. Older browser-local records are not automatically copied or deleted. Progress is calculated from logs and can be edited. The development cloud setup is for synthetic data until security and privacy review is complete.
+## Maps and routing
 
-The route explorer and route creation wizard remain design previews with sample content and temporary state; routes are not published, location-aware, or suitable for navigation. State Requirements offers a Georgia overview and links to official sources, not a complete or personalized eligibility check; other states are not yet covered. The app does not have real mapping integration.
+Map tiles come from the public OpenStreetMap tile service by default, which sees the area you view; set `VITE_MAP_TILE_URL` to use another OpenStreetMap-compatible provider. **Follow roads** sends the chosen points to the public [OSRM demo server](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server). That server is free for light, non-commercial testing (about one request per second) and has no availability guarantee. A pilot needs a paid routing provider or a self-hosted OSRM, and a reviewed tile provider. Suggested routes use mapped road restrictions, which can be incomplete. They are not turn-by-turn navigation, so follow signs and the actual road. Dashboard route thumbnails are drawn from saved points and load no tiles.
 
-See [PROJECT_STATUS.md](PROJECT_STATUS.md) for an earlier assessment, [PRODUCT_PLAN.md](PRODUCT_PLAN.md) for the product vision, and [FIREBASE_SETUP.md](FIREBASE_SETUP.md) for the current Firebase work. Cloud integration needs security review before use with real family data.
+## Tests
 
-The account panel can download a cloud backup. It reads learners and drives separately, so simultaneous edits on other devices may be reflected at different moments. Backups contain readable personal details and locations. After review, a backup can be copied into the cloud account; copying skips identical records and conflicts rather than overwriting them. The import accepts files up to 5 MB; larger downloads display a warning.
+| Command | What it covers | Needs |
+| --- | --- | --- |
+| `npm test` | Practice data, route-line decoding, service config and HTTP handler | Node only |
+| `npm run test:rules` | Firestore security rules | Firebase CLI, Java 21+ |
+| `npm run test:firebase` | Single-supervisor cloud workspace against emulators | Firebase CLI, Java 21+ |
+| `npm run test:shared` | Shared-space service, local gateway and the deployable server | Firebase CLI, Java 21+ |
+| `npm run test:shared:browser` | Shared demo in Chrome: dashboard, routes, logs, invitations | + Chrome |
+| `npm run test:browser` | Single-supervisor workspace in Chrome | + Chrome |
+| `npm run test:live:dev` | Opt-in check against the development Firebase project | Signed-in Firebase CLI, network |
+
+Emulator tests use a `demo-` project and synthetic accounts; they never touch a real project. Run `npm run build` to check the production build.
 
 ## Project structure
 
-- `src/app/App.tsx`: sample data and most application screens and interactions.
-- `src/app/components/ui/`: reusable UI components included in the generated bundle.
-- `src/styles/`: global styles, theme, and fonts.
-- `vite.config.ts`: Vite, React, and Tailwind configuration.
+- `src/app/App.tsx`: app shell (sidebar, header) and the design-preview route explorer used when shared spaces are off.
+- `src/app/design.tsx`: the Figma visual building blocks (cards, progress ring and bars, skill chips, route sketch). Reuse these for new screens.
+- `src/app/SharedDashboard.tsx`, `SharedRoutesEmulator.tsx`, `SharedPracticeEmulator.tsx`, `SharedSpacesEmulator.tsx`: dashboard, routes, driving logs, and people & access for shared spaces. The "Emulator" in the names is historical; they also run against a hosted service.
+- `src/app/sharedAccessEmulator.js`: decides demo or hosted mode and calls the shared service.
+- `src/app/RouteMap.tsx`, `followRoads.js`, `routePolyline.js`: Leaflet map, OSRM request, and route-line decoding.
+- `src/app/FamilyWorkspace.tsx`, `cloudFamily.js`, `familyData.js`: the older single-supervisor workspace.
+- `server/sharedAccess.mjs`: the trusted shared-space service (memberships, invitations, routes, drives).
+- `server/sharedGateway.mjs`: HTTP handler shared by the local demo gateway (`localSharedGateway.mjs`) and the deployable server (`main.mjs`, configured by `config.mjs`).
+- `firestore.rules`: security rules; shared-space data is read-only to clients, and all writes go through the service.
+- `scripts/shared-demo.mjs`: seeds and starts the local demo.
+- `tests/`: browser tests (`browser/`, `shared-browser/`) and the live development check (`live/`).
 
-The original design bundle references [Desktop Web Dashboard Design on Figma](https://www.figma.com/design/Whz9TgPqbRKDzbyiPCFKKg/Desktop-Web-Dashboard-Design). See `ATTRIBUTIONS.md` for additional attribution.
+## Documentation
+
+- [DEPLOYMENT.md](DEPLOYMENT.md): host the shared service and connect the app to it
+- [PROJECT_STATUS.md](PROJECT_STATUS.md): where the project stands and what's next
+- [PRODUCT_PLAN.md](PRODUCT_PLAN.md): vision, phases and open product decisions
+- [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md): roles, permissions, invitations and data model
+- [FIREBASE_SETUP.md](FIREBASE_SETUP.md): Firebase projects, rules and the single-supervisor workspace
+- [SECURITY_REVIEW.md](SECURITY_REVIEW.md): internal review and blockers for a real-data pilot
+
+The original design is [Desktop Web Dashboard Design on Figma](https://www.figma.com/design/Whz9TgPqbRKDzbyiPCFKKg/Desktop-Web-Dashboard-Design). See `ATTRIBUTIONS.md` for attribution.

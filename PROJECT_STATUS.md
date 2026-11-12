@@ -1,37 +1,40 @@
 # DriveReady project status
 
-Assessment of the workspace, November 1, 2026. Augusta, Georgia has been selected as the first pilot area. This is a working assessment, not an agreed product specification.
+Updated November 11, 2026. This replaces the November 1 assessment. The pilot area is Augusta, Georgia; all data so far is fictional.
 
-## Product hypothesis
+## Where things stand
 
-DriveReady appears intended to help families or other supervisors guide learner drivers through supervised practice: choose appropriate routes and skills, record sessions, and understand progress toward state licensing requirements. Community-created routes could help people discover practice opportunities nearby.
+The product has converged on **shared learner spaces**: one space per learner, managed by a supervisor, with invited supervisors and the learner as members. In this model the phase 1 milestone from [PRODUCT_PLAN.md](PRODUCT_PLAN.md) works end to end: find or create a real mapped route, record a drive against it, and let the learner review the route and notes.
 
-## What exists
+| Area | State |
+| --- | --- |
+| Visual design | Restored to the original Figma style through shared building blocks in `src/app/design.tsx`: Figma sidebar and header, card dashboard, colour-coded skill chips, progress ring. |
+| Dashboard | Hours toward Georgia's 40 hours (6 at night), recent drives, skill and condition coverage with a suggestion of something new to try, and saved routes, per learner. |
+| Routes | Leaflet map drawing, OSRM road snapping (required before saving), and a split view of the saved-routes list beside a large map. Routes are private to a learner's space. |
+| Driving logs | Drives must use a mapped route and record skills and conditions; edits keep attribution and detect conflicting changes, and saves can be retried safely. |
+| People & access | Create spaces, issue one-time invitations, accept, cancel, remove members. Invitations are shared manually. |
+| Shared service | `server/sharedAccess.mjs` behind one HTTP handler. It runs as the local demo gateway or as a deployable server (`server/main.mjs`) with origin allow-listing, rate limiting and request logs that record no content. **Not yet deployed.** |
+| Single-supervisor workspace | Still what `npm run dev` shows when no shared service is configured. To be retired once the shared service is hosted. |
+| State requirements | Sourced Georgia DDS overview; no eligibility calculation; no other states. |
 
-- A React, Vite, and Tailwind desktop-oriented interface, based on a Figma export.
-- Learner creation and manual drive logs, including edits and per-learner day/night totals, stored locally in the current browser.
-- Manual JSON backup and restore, with validation and explicit confirmation before replacing browser data.
-- A Georgia requirements overview linking to DDS resources; it does not determine eligibility and other states are not yet covered.
-- A route explorer with sample routes, search and filters, a diagrammatic map, selection, zoom, and temporary favorites.
-- A three-step route creation interface with waypoint drawing, skills, difficulty, and safety fields. Its publish action only closes the wizard.
-- A successful local `npm run build` on November 1, 2026. This verifies compilation, not complete functionality or correctness.
+All automated suites pass as of this update: unit tests, rules, single-supervisor emulator and browser tests, shared service and browser tests (including the dashboard and the deployable server), and the production build.
 
-## Gaps and risks to resolve
+## How to run it
 
-- **Real workflows and data:** Learner profiles and drive logs persist only in this browser. Manual backup is available, but there is no backend, sync, or automatic backup. Route and community data remain examples.
-- **Navigation and controls:** The route explorer remains a design preview, and some visible actions have no behavior, including Use Route. Search matches route title, neighborhood, or skill rather than the advertised ZIP code or school search.
-- **Maps and sharing:** Maps and waypoints are SVG illustrations, not geographic routes or navigation. Publishing does not save or share data, and favorites are temporary.
-- **Trust and safety:** Sample route and safety descriptions should not be treated as real-world guidance. The Georgia overview links to authoritative sources, but a sustained update process and further review are needed before any eligibility calculations. Community publishing would also need a safety and moderation approach.
-- **Product fit:** The mock references both Atlanta and the Augusta area and uses a fixed date. Responsive/mobile behavior and accessibility need assessment; the current interface uses fixed desktop-oriented dimensions.
-- **Engineering foundation:** Much of the original route prototype remains in `src/app/App.tsx`. Basic family-data tests are available, but lint and TypeScript checking are not yet configured. The workspace is a Git repository.
+- **Everything, locally, no setup:** `npm run demo:shared` (see [README.md](README.md)).
+- **Against the development Firebase project:** host the shared service and set `VITE_SHARED_API_URL` (see [DEPLOYMENT.md](DEPLOYMENT.md)).
 
-## Decisions to make together
+## Next steps
 
-1. Who is the primary user: a parent or supervisor, a learner, a driving instructor, or several roles?
-2. What is the first end-to-end outcome: recording hours, finding and planning practice, or something else?
-3. Which locations and licensing jurisdictions should the first release serve?
-4. Should routes be private, shared within a family, or community-published? What level of map and navigation is expected?
-5. Is the intended experience desktop web, mobile web, a mobile app, or a combination?
-6. What existing designs, requirements, data, or previous work should inform the product?
+1. **Host the shared service** on the development project (Railway is ready via `railway.json`), deploy the current rules, and point `npm run dev` at it.
+2. **Retire the single-supervisor path:** once shared mode runs on the development project, remove `users/{uid}` records from the rules and code, along with the design-preview route explorer, the unused `components/ui` kit and unused dependencies. The development data is fictional, so no migration is needed.
+3. **Add type checking and CI:** add a `tsconfig.json` and a GitHub Actions workflow running `npm test`, the emulator suites and the build.
+4. **Make logging easier:** a drive timer for the passenger, automatic night minutes from sunset times, and a printable practice log.
+5. **Before real families:** privacy notice, data and account deletion, a reviewed routing and tile provider, invitation delivery, and independent security review ([SECURITY_REVIEW.md](SECURITY_REVIEW.md)).
 
-Once those choices are clear, agree on a small first usable workflow and its data, privacy, safety, and verification needs before selecting infrastructure or implementing the rest.
+## Known limits
+
+- Totals on the dashboard cover up to 1,000 drives per learner; the logs page loads 50 at a time.
+- Rate limiting is per service instance and in memory.
+- Public OSRM and OpenStreetMap services are for light testing only.
+- Learners cannot yet write notes or submit routes; community routes, voting and moderation are not built.

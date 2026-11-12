@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DocumentSnapshot } from "firebase/firestore";
-import { readSharedRoutes, sharedAccessRequest } from "./sharedAccessEmulator";
+import { readSharedRoutes, sharedAccessRequest, sharedAccessDemo } from "./sharedAccessEmulator";
 import RouteMap, { type RoutePoint } from "./RouteMap";
 import { decodeRoutePolyline } from "./routePolyline";
 import { followRoads } from "./followRoads";
@@ -115,8 +115,8 @@ export default function SharedRoutesEmulator({ uid, spaces, blocked, run, create
   const activePath = useMemo(() => { try { return activeRoute?.roadPolyline ? decodeRoutePolyline(activeRoute.roadPolyline) : undefined; } catch { return undefined; } }, [activeRoute?.roadPolyline]);
   const activePoints = Array.isArray(activeRoute?.geometry) && activeRoute.geometry.length >= 2 ? activeRoute.geometry : null;
   if (!spaces.length && !pending) return null;
-  return <section className="space-y-5 text-sm" aria-label="Shared routes · local emulator">
-    <h4 className="sr-only">Shared routes · local emulator</h4>
+  return <section className="space-y-5 text-sm" aria-label={sharedAccessDemo ? "Shared routes · local emulator" : "Shared routes"}>
+    <h4 className="sr-only">{sharedAccessDemo ? "Shared routes · local emulator" : "Shared routes"}</h4>
     <div className="flex flex-wrap items-end justify-between gap-3">
       <label className="flex w-full flex-col gap-1 sm:w-auto text-[11px] font-semibold uppercase tracking-wider text-muted-foreground" style={mono}>Route learner
         <select className="w-full rounded-lg sm:w-auto sm:min-w-[240px] border border-border bg-card px-3 py-2 text-sm font-medium normal-case tracking-normal text-foreground" style={{ fontFamily: "'Inter', sans-serif" }} value={selected} disabled={blocked || !!pending} onChange={(event) => { if (event.target.value === selected) return; if ((name || start || destination || points.length) && !window.confirm("Move the unfinished route to the selected learner’s space?")) return; generation.current += 1; setRoutes([]); setCursor(null); setActiveId(""); setSelected(event.target.value); setMessage(""); }}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.learnerName} · {item.role}</option>)}</select>
