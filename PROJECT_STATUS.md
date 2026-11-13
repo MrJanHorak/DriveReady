@@ -18,7 +18,7 @@ DriveReady is deployed for development: the web app on Vercel (https://drive-rea
 | Practice log | Printable one-learner log with totals, every drive and signature lines; prints or saves as PDF through the browser. Supervisor emails show for managers; others see "Supervisor". |
 | Deletion | Drives, routes, leaving a space, deleting a whole space (manager, name confirmation), and deleting your own account (email and password confirmation; managers delete their spaces first); permanent. |
 | Privacy notice | In-app plain-language page (not a reviewed policy); linked from sign-in. The contact address is a placeholder (`src/app/contact.js`). |
-| People & access | Spaces, one-time invitation links (copy or share; the invitee reviews and joins in one tap), removal. |
+| People & access | Figma-styled page (November 13): learner spaces, joining with a link, and a manage card per learner with people, invitation links (copy or share; the invitee reviews and joins in one tap), pending invitations, removal and space deletion. |
 | Shared service | Deployed (`server/main.mjs`): origin allow-list, rate limit, request logs that record no content. |
 | Code health | Unused Figma-export kit and about 50 unused dependencies removed; strict TypeScript check (`npm run typecheck`) passes. |
 | State requirements | Sourced Georgia DDS overview; no eligibility calculation; no other states. |

@@ -64,7 +64,7 @@ test("supervisors can delete drives and routes, leave a space, and the manager c
     const supervisorPage = await supervisorContext.newPage();
     supervisorPage.on("dialog", (dialog) => dialog.accept());
     await signIn(supervisorPage, supervisor.email);
-    await supervisorPage.getByRole("button", { name: "People & access", exact: true }).click();
+    await supervisorPage.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "People & access", exact: true }).click();
     const spacesList = supervisorPage.getByRole("list", { name: "Shared spaces" });
     await spacesList.getByRole("button", { name: "Leave space" }).click();
     await expect(supervisorPage.getByText("You left Casey Delete’s space.")).toBeVisible();
@@ -72,7 +72,7 @@ test("supervisors can delete drives and routes, leave a space, and the manager c
     expect((await space.collection("members").doc(supervisor.uid).get()).data().active).toBe(false);
 
     // The manager deletes the whole space after typing the learner's name.
-    await page.getByRole("button", { name: "People & access", exact: true }).click();
+    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "People & access", exact: true }).click();
     const danger = page.getByLabel("Delete learner space");
     const confirm = danger.getByLabel("Type Casey Delete to confirm");
     const remove = danger.getByRole("button", { name: "Delete learner space" });
