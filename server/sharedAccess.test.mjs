@@ -349,3 +349,85 @@ test("shared drives store only catalog skills and conditions, in catalog order, 
   assert.deepEqual(saved.practicedSkills, ["Parking"]);
   assert.deepEqual(saved.practicedConditions, []);
 });
+
+// A space with a manager, an invited supervisor and a learner, built through the service.
+async function deletionFixture(tag) {
+  const suffix = randomUUID().slice(0, 8);
+  const manager = await account(`del-manager-${tag}-${suffix}`), supervisor = await account(`del-supervisor-${tag}-${suffix}`), learner = await account(`del-learner-${tag}-${suffix}`), outsider = await account(`del-outsider-${tag}-${suffix}`);
+  const { spaceId } = await service.createSpace({ idToken: manager.token, learnerName: "Deletion learner" });
+  for (const [person, role] of [[supervisor, "supervisor"], [learner, "learner"]]) {
+    const invite = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: person.email, role });
+    await service.acceptInvitation({ idToken: person.token, spaceId, token: invite.token });
+  }
+  const route = await service.createRoute({ idToken: supervisor.token, spaceId, operationId: randomUUID(), name: "Supervisor route", start: "Fictional start", destination: "Fictional end", geometry, roadPolyline: testRoadPolyline });
+  const drive = async (person) => {
+    const operationId = randomUUID();
+    await service.createDrive({ idToken: person.token, spaceId, operationId, date: "2026-11-01", minutes: "30", nightMinutes: "0", notes: "", supervisorPresentUid: person.uid, routeId: route.routeId });
+    return operationId;
+  };
+  return { manager, supervisor, learner, outsider, spaceId, routeId: route.routeId, drive };
+}
+
+test("drives can be deleted by the manager or the supervisor who recorded them, only at the current revision", async () => {
+  const { manager, supervisor, learner, outsider, spaceId, drive } = await deletionFixture("drive");
+  const managersDrive = await drive(manager), supervisorsDrive = await drive(supervisor);
+  for (const person of [learner, outsider]) await assert.rejects(service.deleteDrive({ idToken: person.token, spaceId, driveId: supervisorsDrive, expectedRevision: "0" }), /Not authorized/);
+  await assert.rejects(service.deleteDrive({ idToken: supervisor.token, spaceId, driveId: managersDrive, expectedRevision: "0" }), /Not authorized/);
+  await assert.rejects(service.deleteDrive({ idToken: supervisor.token, spaceId, driveId: supervisorsDrive, expectedRevision: "1" }), /changed on another device/);
+  await assert.rejects(service.deleteDrive({ idToken: supervisor.token, spaceId, driveId: supervisorsDrive, expectedRevision: "x" }), /Invalid drive/);
+  assert.deepEqual(await service.deleteDrive({ idToken: supervisor.token, spaceId, driveId: supervisorsDrive, expectedRevision: "0" }), { deleted: true });
+  assert.deepEqual(await service.deleteDrive({ idToken: supervisor.token, spaceId, driveId: supervisorsDrive, expectedRevision: "0" }), { deleted: false }, "repeating is harmless");
+  assert.equal((await db.doc(`spaces/${spaceId}/drives/${supervisorsDrive}`).get()).exists, false);
+  const another = await drive(supervisor);
+  assert.deepEqual(await service.deleteDrive({ idToken: manager.token, spaceId, driveId: another, expectedRevision: "0" }), { deleted: true }, "the manager may delete any drive");
+  assert.equal((await db.doc(`spaces/${spaceId}/drives/${managersDrive}`).get()).exists, true);
+});
+
+test("routes can be deleted by their creator or the manager; logged drives keep their route snapshot", async () => {
+  const { manager, supervisor, learner, spaceId, routeId, drive } = await deletionFixture("route");
+  const driveId = await drive(supervisor);
+  const otherSupervisor = await account(`del-other-${randomUUID().slice(0, 8)}`);
+  const invite = await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: otherSupervisor.email, role: "supervisor" });
+  await service.acceptInvitation({ idToken: otherSupervisor.token, spaceId, token: invite.token });
+  for (const person of [learner, otherSupervisor]) await assert.rejects(service.deleteRoute({ idToken: person.token, spaceId, routeId }), /Not authorized/);
+  assert.deepEqual(await service.deleteRoute({ idToken: supervisor.token, spaceId, routeId }), { deleted: true });
+  assert.equal((await db.doc(`spaces/${spaceId}/routes/${routeId}`).get()).exists, false);
+  assert.equal((await db.doc(`spaces/${spaceId}/drives/${driveId}`).get()).data().routeSnapshot.name, "Supervisor route");
+  const managersRoute = await service.createRoute({ idToken: otherSupervisor.token, spaceId, operationId: randomUUID(), name: "Other route", start: "A", destination: "B", geometry, roadPolyline: testRoadPolyline });
+  assert.deepEqual(await service.deleteRoute({ idToken: manager.token, spaceId, routeId: managersRoute.routeId }), { deleted: true });
+});
+
+test("supervisors and learners can leave a space; the manager cannot", async () => {
+  const { manager, supervisor, learner, spaceId } = await deletionFixture("leave");
+  await assert.rejects(service.leaveSpace({ idToken: manager.token, spaceId }), /Not authorized/);
+  for (const person of [supervisor, learner]) {
+    assert.deepEqual(await service.leaveSpace({ idToken: person.token, spaceId }), { left: true });
+    assert.equal((await db.doc(`spaces/${spaceId}/members/${person.uid}`).get()).data().active, false);
+    assert.equal((await db.doc(`users/${person.uid}/spaceLinks/${spaceId}`).get()).exists, false);
+    await assert.rejects(getDocFromServer(doc(person.db, `spaces/${spaceId}`)));
+    await assert.rejects(service.leaveSpace({ idToken: person.token, spaceId }), /Not authorized/, "leaving twice");
+  }
+});
+
+test("the manager can delete a whole space after confirming the learner's name; nothing is left behind", async () => {
+  const { manager, supervisor, learner, outsider, spaceId, drive } = await deletionFixture("space");
+  await drive(supervisor); await drive(manager);
+  await service.createInvitation({ idToken: manager.token, spaceId, recipientEmail: outsider.email, role: "supervisor" });
+  for (const person of [supervisor, learner, outsider]) await assert.rejects(service.deleteSpace({ idToken: person.token, spaceId, confirmName: "Deletion learner" }), /Not authorized/);
+  await assert.rejects(service.deleteSpace({ idToken: manager.token, spaceId, confirmName: "deletion learner" }), /exactly/);
+  await assert.rejects(service.deleteSpace({ idToken: manager.token, spaceId }), /exactly/);
+  assert.deepEqual(await service.deleteSpace({ idToken: manager.token, spaceId, confirmName: "  Deletion learner " }), { deleted: true });
+  assert.equal((await db.doc(`spaces/${spaceId}`).get()).exists, false);
+  for (const sub of ["members", "drives", "routes", "invitations"]) assert.equal((await db.collection(`spaces/${spaceId}/${sub}`).get()).size, 0, sub);
+  for (const person of [manager, supervisor, learner]) assert.equal((await db.doc(`users/${person.uid}/spaceLinks/${spaceId}`).get()).exists, false);
+  assert.deepEqual(await service.deleteSpace({ idToken: manager.token, spaceId, confirmName: "Deletion learner" }), { deleted: false }, "repeating is harmless");
+});
+
+test("an interrupted space deletion blocks other changes and can be finished by the manager", async () => {
+  const { manager, supervisor, spaceId, routeId } = await deletionFixture("resume");
+  await db.doc(`spaces/${spaceId}`).update({ status: "deleting" });
+  await assert.rejects(service.createDrive({ idToken: supervisor.token, spaceId, operationId: randomUUID(), date: "2026-11-01", minutes: "30", nightMinutes: "0", notes: "", supervisorPresentUid: supervisor.uid, routeId }), /Not authorized/);
+  await assert.rejects(service.deleteSpace({ idToken: supervisor.token, spaceId, confirmName: "Deletion learner" }), /Not authorized/);
+  assert.deepEqual(await service.deleteSpace({ idToken: manager.token, spaceId, confirmName: "" }), { deleted: true }, "resuming needs no second confirmation");
+  assert.equal((await db.doc(`spaces/${spaceId}`).get()).exists, false);
+});

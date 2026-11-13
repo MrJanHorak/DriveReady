@@ -21,7 +21,7 @@ export default function Workspace({ page, onNavigate, onBusyChange }: { page: st
     if (!auth) return;
     return onAuthStateChanged(auth, (next) => { setUser(next); setAuthLoading(false); }, () => { setUser(null); setAuthLoading(false); });
   }, []);
-  return <main className="relative flex-1 overflow-auto p-4 sm:p-6" style={{ display: page === "requirements" ? "none" : undefined }}><div className="mx-auto max-w-6xl space-y-5">
+  return <main className="relative flex-1 overflow-auto p-4 sm:p-6" style={{ display: page === "requirements" || page === "privacy" ? "none" : undefined }}><div className="mx-auto max-w-6xl space-y-5">
     {busy && <p role="status" className="rounded-lg bg-[#E4EFF2] p-3 text-sm text-[#095969]">Saving… Please wait before switching sections or signing out.</p>}
     {!sharedAccessEnabled && <Card className="p-5" aria-label="Setup required">
       <h2 className="text-base font-bold">DriveReady isn’t connected to its shared service</h2>

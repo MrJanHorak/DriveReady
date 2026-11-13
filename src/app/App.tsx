@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ClipboardList, FileText, LayoutDashboard, Map, Navigation, UserCircle2, Users } from "lucide-react";
+import { ClipboardList, FileText, LayoutDashboard, Map, Navigation, Shield, UserCircle2, Users } from "lucide-react";
 import Workspace from "./Workspace";
 import StateRequirements from "./StateRequirements";
+import Privacy from "./Privacy";
 import { sharedAccessEnabled } from "./sharedClient";
 import { heading, mono } from "./design";
 
@@ -12,14 +13,15 @@ const navItems = [
   { id: "requirements", label: "State Requirements", icon: <ClipboardList size={17} /> },
   { id: "shared", label: "People & access", icon: <Users size={17} /> },
   { id: "account", label: "Account", icon: <UserCircle2 size={17} /> },
+  { id: "privacy", label: "Privacy", icon: <Shield size={17} /> },
 ];
 
 export default function App() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [busy, setBusy] = useState(false);
   // Without a shared service only the state requirements and account pages are useful.
-  const nav = sharedAccessEnabled ? navItems : navItems.filter((item) => ["requirements", "account"].includes(item.id));
-  const page = nav.some((item) => item.id === activeNav) ? activeNav : nav[nav.length - 1].id;
+  const nav = sharedAccessEnabled ? navItems : navItems.filter((item) => ["requirements", "account", "privacy"].includes(item.id));
+  const page = nav.some((item) => item.id === activeNav) ? activeNav : "account";
   const title = nav.find((item) => item.id === page)?.label ?? "Dashboard";
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
@@ -43,6 +45,7 @@ export default function App() {
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <header className="flex h-16 flex-shrink-0 items-center border-b border-border bg-card px-5 sm:px-6"><div><h1 className="text-lg font-bold leading-none text-foreground" style={heading}>{title}</h1><p className="mt-1 text-xs text-muted-foreground">{today}</p></div></header>
       {page === "requirements" && <StateRequirements />}
+      {page === "privacy" && <Privacy />}
       <Workspace page={page} onNavigate={setActiveNav} onBusyChange={setBusy} />
     </div>
   </div>;

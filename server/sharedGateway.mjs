@@ -16,6 +16,10 @@ export const ROUTES = Object.freeze({
   "/v1/drives": { action: "createDrive", fields: ["spaceId", "operationId", "date", "minutes", "nightMinutes", "notes", "supervisorPresentUid"], optional: ["routeId", "practicedSkills", "practicedConditions"] },
   "/v1/drives/edit": { action: "editDrive", fields: ["spaceId", "driveId", "operationId", "expectedRevision", "date", "minutes", "nightMinutes", "notes"], optional: ["practicedSkills", "practicedConditions"] },
   "/v1/routes": { action: "createRoute", fields: ["spaceId", "operationId", "name", "start", "destination"], optional: ["geometry", "roadPolyline"] },
+  "/v1/routes/delete": { action: "deleteRoute", fields: ["spaceId", "routeId"] },
+  "/v1/drives/delete": { action: "deleteDrive", fields: ["spaceId", "driveId", "expectedRevision"] },
+  "/v1/spaces/leave": { action: "leaveSpace", fields: ["spaceId"] },
+  "/v1/spaces/delete": { action: "deleteSpace", fields: ["spaceId", "confirmName"] },
 });
 
 function readBody(req) {

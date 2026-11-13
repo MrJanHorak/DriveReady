@@ -5,15 +5,15 @@ import RouteMap, { type RoutePoint } from "./RouteMap";
 import { decodeRoutePolyline } from "./routePolyline";
 import { followRoads } from "./followRoads";
 import { ChevronDown, Map as MapIcon, Navigation, Plus, RefreshCw } from "lucide-react";
-import { Badge, Card, CardHeader, RouteSketch, ghostButton, heading, mono, primaryButton } from "./design";
+import { Badge, Card, CardHeader, RouteSketch, dangerButton, ghostButton, heading, mono, primaryButton } from "./design";
 
 type Space = { id: string; learnerName: string; role: string };
-type Route = { id: string; name: string; start: string; destination: string; geometry?: RoutePoint[]; roadPolyline?: string };
+type Route = { id: string; name: string; start: string; destination: string; geometry?: RoutePoint[]; roadPolyline?: string; createdByUid?: string };
 type Draft = { spaceId: string; operationId: string; name: string; start: string; destination: string; geometry: string; roadPolyline: string };
 const field = "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm font-normal outline-none transition-all focus:border-[#0C7A8D] focus:ring-2 focus:ring-[#0C7A8D]/15";
 const button = "rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50";
 
-export default function SharedRoutes({ uid, spaces, blocked, run, createRequest, onCreated, activePage }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void>; createRequest: { spaceId: string; nonce: string } | null; onCreated: (spaceId: string, routeId: string) => void; activePage: boolean }) {
+export default function SharedRoutes({ uid, spaces, blocked, run, createRequest, onCreated, onDeleted, activePage }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void>; createRequest: { spaceId: string; nonce: string } | null; onCreated: (spaceId: string, routeId: string) => void; onDeleted?: () => void; activePage: boolean }) {
   const [selected, setSelected] = useState("");
   const [routes, setRoutes] = useState<Route[]>([]);
   const [cursor, setCursor] = useState<DocumentSnapshot | null>(null);
@@ -111,6 +111,18 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
       if (alive.current) { setMessage("Shared route saved."); onCreated(draft.spaceId, result.routeId); }
     });
   }
+  function removeRoute(route: Route) {
+    if (blocked || pending || !window.confirm(`Delete the route “${route.name}”? Drives already logged on it keep their copy of the route. This can’t be undone.`)) return;
+    setMessage("");
+    void run(async () => {
+      await sharedAccessRequest(uid, "deleteRoute", { spaceId: selected, routeId: route.id });
+      if (!alive.current) return;
+      setActiveId("");
+      await refresh();
+      onDeleted?.();
+      if (alive.current) setMessage("Route deleted.");
+    });
+  }
   const activeRoute = routes.find((route) => route.id === activeId) ?? routes[0];
   const activePath = useMemo(() => { try { return activeRoute?.roadPolyline ? decodeRoutePolyline(activeRoute.roadPolyline) : undefined; } catch { return undefined; } }, [activeRoute?.roadPolyline]);
   const activePoints = Array.isArray(activeRoute?.geometry) && activeRoute.geometry.length >= 2 ? activeRoute.geometry : null;
@@ -141,6 +153,7 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
             <div className="space-y-1.5 border-t border-border px-3 py-2.5 text-xs">
               <p><strong>Start:</strong> {route.start}</p><p><strong>Destination:</strong> {route.destination}</p>
               <p className="text-muted-foreground">{route.roadPolyline ? <>Suggested road route by <a className="underline" href="https://project-osrm.org/" target="_blank" rel="noopener noreferrer">OSRM</a>. Review before use; this is not turn-by-turn navigation.</> : Array.isArray(route.geometry) ? "Drawn route: lines connect the selected points; this is not turn-by-turn navigation." : "This older route has no map points."}</p>
+              {(space?.role === "manager" || route.createdByUid === uid) && <button type="button" className={`${dangerButton} mt-1`} disabled={blocked || !!pending} onClick={() => removeRoute(route)}>Delete route</button>}
             </div>
           </details></li>;
         })}</ul>}

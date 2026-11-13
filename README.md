@@ -15,6 +15,8 @@ It is a working prototype. Use fictional data only: security and privacy review 
 - **Drive timer:** the passenger starts it as the drive begins, pauses it for stops, and taps **Stop & log** to open the drive form with the date and minutes filled in. It survives reloads and a locked phone (kept in that browser), keeps the screen awake where supported, and clears once the drive is saved.
 - **Night minutes:** give a drive a start time (the timer fills it in) and the form suggests how many minutes fell after sunset or before sunrise, at the route's start point or the Augusta area, and fills them in. Georgia DDS doesn't define "night", so the suggestion can always be changed.
 - **Printable practice log:** **Print log** on Driving Logs previews a one-learner log (every drive in date order with route, duration, night minutes, skills, supervisor and notes; totals against Georgia's 40/6; signature lines) and prints it or saves it as PDF through the browser. It is a personal record, not an official DDS form.
+- **Deleting and leaving:** delete drives and routes you're allowed to edit; supervisors and learners can leave a space; the managing supervisor can delete a learner's whole space after typing the learner's name.
+- **Privacy notice:** the **Privacy** page explains in plain language what is stored, who can see it and which outside services are involved.
 - **State requirements:** a sourced Georgia DDS overview with links. Other states are not covered yet.
 
 Shared spaces run in two ways: in the **local demo** (`npm run demo:shared`) with no setup beyond the emulators, or with **plain `npm run dev`** once the shared service is hosted (see [DEPLOYMENT.md](DEPLOYMENT.md)). Without either, the app shows a short setup notice and the State Requirements page.

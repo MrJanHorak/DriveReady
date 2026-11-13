@@ -6,7 +6,7 @@ import SharedRouteCard from "./SharedRouteCard";
 import type { RoutePoint } from "./RouteMap";
 import { PracticeChoices } from "./PracticeChoices";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
-import { SkillTag, ghostButton, heading, mono, primaryButton } from "./design";
+import { SkillTag, dangerButton, ghostButton, heading, mono, primaryButton } from "./design";
 import { PILOT_AREA, nightMinutes as nightOverlap, sunTimes } from "./sunTimes";
 import { formatDate, formatDuration } from "./SharedDashboard";
 import DriveTimer, { type TimerDraft } from "./DriveTimer";
@@ -58,6 +58,8 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
   routeIdRef.current = routeId;
   const [routeError, setRouteError] = useState(false);
   const [routeCursor, setRouteCursor] = useState<DocumentSnapshot | null>(null);
+  const routeCursorRef = useRef<DocumentSnapshot | null>(null);
+  useEffect(() => { routeCursorRef.current = routeCursor; }, [routeCursor]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const loadingRoutesRef = useRef(false);
   const [routeNotice, setRouteNotice] = useState("");
@@ -113,9 +115,18 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
       const result = await readSharedRoutes(uid, selected);
       if (!active.current || request !== routeGeneration.current) return;
       const fresh = result.routes as Route[];
-      setRoutes((existing) => [...fresh, ...existing.filter((route) => !fresh.some((item) => item.id === route.id))]
+      // With every route loaded, the fresh list is complete, so deleted routes drop out.
+      // With more pages loaded, keep the extra routes and only add new ones.
+      const complete = routeCursorRef.current === null;
+      setRoutes((existing) => complete ? fresh : [...fresh, ...existing.filter((route) => !fresh.some((item) => item.id === route.id))]
         .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)));
-      setRouteCursor((current) => current ?? result.cursor);
+      if (complete) {
+        setRouteCursor(result.cursor);
+        setRouteId((current) => {
+          if (current && !fresh.some((route) => route.id === current)) { setRouteNotice("The selected route was deleted. Choose another route."); return ""; }
+          return current;
+        });
+      } else setRouteCursor((current) => current ?? result.cursor);
       setRouteError(false);
     } catch { /* keep the current list; the manual refresh reports errors */ }
   }, [uid, selected]);
@@ -225,6 +236,16 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
     if ((date || minutes || notes || routeId || skills.length || conditions.length) && !window.confirm("Replace the current unsaved practice form?")) return;
     setEditing(drive); setFormOpen(true); setStartTime(""); setNightTouched(true); setDate(drive.date); setMinutes(String(drive.minutes)); setNightMinutes(String(drive.nightMinutes)); setNotes(drive.notes); setSkills(drive.practicedSkills ?? []); setConditions(drive.practicedConditions ?? []); setMessage("");
   }
+  function removeDrive(drive: Drive) {
+    if (blocked || pendingRef.current || !window.confirm(`Delete the drive from ${formatDate(drive.date)} (${formatDuration(drive.minutes)})? It will be removed for everyone in this learner’s space and can’t be undone.`)) return;
+    if (editing?.id === drive.id) resetForm();
+    setMessage("");
+    void run(async () => {
+      await sharedAccessRequest(uid, "deleteDrive", { spaceId: selected, driveId: drive.id, expectedRevision: String(drive.revision ?? 0) });
+      await refreshHistory();
+      if (active.current) setMessage("Practice drive deleted.");
+    });
+  }
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (blocked || !selected || !canRecord) return;
@@ -270,7 +291,7 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
     {historyError && <p role="status">Could not load practice history. Check access and refresh.</p>}
     {space && historyLoaded && <div className="mt-3 grid grid-cols-2 gap-2" aria-label="Shared practice totals"><span className="sr-only">{cursor ? "Totals for loaded drives" : "Practice totals"}: {drives.reduce((total, drive) => total + drive.minutes, 0)} minutes, including {drives.reduce((total, drive) => total + drive.nightMinutes, 0)} at night.</span><div className="rounded-xl bg-[#E4EFF2] p-3"><span className="block text-xs text-muted-foreground">{cursor ? "Loaded practice" : "Total practice"}</span><strong className="text-xl text-[#0C7A8D]">{drives.reduce((total, drive) => total + drive.minutes, 0)} min</strong></div><div className="rounded-xl bg-[#E4EFF2] p-3"><span className="block text-xs text-muted-foreground">At night</span><strong className="text-xl text-[#0C7A8D]">{drives.reduce((total, drive) => total + drive.nightMinutes, 0)} min</strong></div></div>}
     {cursor && <p>More drives are available. Totals include only loaded drives. Refresh to pick up changes made while browsing.</p>}
-    <ul aria-label="Shared practice history" className="mt-3 space-y-3">{space && drives.map((drive) => <li key={`${selected}-${drive.id}`} className="space-y-2 rounded-2xl border border-border bg-card p-4"><p className="flex flex-wrap items-baseline gap-x-2"><strong className="text-sm" style={heading}>{formatDate(drive.date)}</strong><span className="text-xs text-muted-foreground" style={mono}>{formatDuration(drive.minutes)}{drive.nightMinutes > 0 && <span className="text-[#12B5C9]"> · {formatDuration(drive.nightMinutes)} night</span>}</span></p>{drive.routeSnapshot && <SharedRouteCard route={drive.routeSnapshot} recorded uid={uid} spaceId={selected} routeId={drive.routeId} />}{(drive.practicedSkills?.length || drive.practicedConditions?.length) ? <div className="flex flex-wrap gap-1.5" aria-label="Practised">{[...(drive.practicedSkills ?? []), ...(drive.practicedConditions ?? [])].map((tag) => <SkillTag key={tag} label={tag} />)}</div> : null}{drive.notes && <p>{drive.notes}</p>}<details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Recording details</summary><p>Recorded by account {drive.recordedByUid}; reported supervisor account {drive.supervisorPresentUid}.{drive.lastEditedByUid && drive.lastEditedByUid !== drive.recordedByUid ? ` Last edited by account ${drive.lastEditedByUid}.` : ""}</p></details>{canRecord && (space.role === "manager" || drive.recordedByUid === uid) && <button type="button" className={button} disabled={blocked || !!pending} onClick={() => startEdit(drive)}>Edit practice</button>}</li>)}</ul>
+    <ul aria-label="Shared practice history" className="mt-3 space-y-3">{space && drives.map((drive) => <li key={`${selected}-${drive.id}`} className="space-y-2 rounded-2xl border border-border bg-card p-4"><p className="flex flex-wrap items-baseline gap-x-2"><strong className="text-sm" style={heading}>{formatDate(drive.date)}</strong><span className="text-xs text-muted-foreground" style={mono}>{formatDuration(drive.minutes)}{drive.nightMinutes > 0 && <span className="text-[#12B5C9]"> · {formatDuration(drive.nightMinutes)} night</span>}</span></p>{drive.routeSnapshot && <SharedRouteCard route={drive.routeSnapshot} recorded uid={uid} spaceId={selected} routeId={drive.routeId} />}{(drive.practicedSkills?.length || drive.practicedConditions?.length) ? <div className="flex flex-wrap gap-1.5" aria-label="Practised">{[...(drive.practicedSkills ?? []), ...(drive.practicedConditions ?? [])].map((tag) => <SkillTag key={tag} label={tag} />)}</div> : null}{drive.notes && <p>{drive.notes}</p>}<details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Recording details</summary><p>Recorded by account {drive.recordedByUid}; reported supervisor account {drive.supervisorPresentUid}.{drive.lastEditedByUid && drive.lastEditedByUid !== drive.recordedByUid ? ` Last edited by account ${drive.lastEditedByUid}.` : ""}</p></details>{canRecord && (space.role === "manager" || drive.recordedByUid === uid) && <button type="button" className={button} disabled={blocked || !!pending} onClick={() => startEdit(drive)}>Edit practice</button>}{canRecord && (space.role === "manager" || drive.recordedByUid === uid) && <button type="button" className={`${dangerButton} ml-2`} disabled={blocked || !!pending} onClick={() => removeDrive(drive)}>Delete</button>}</li>)}</ul>
     {cursor && <button type="button" className={`${button} mt-2`} disabled={blocked || loadingMore} onClick={() => void loadMoreHistory()}>{loadingMore ? "Loading drives…" : "Load older drives"}</button>}
     {pending && !canRecord && <div className="mt-3 rounded border border-amber-400 p-3"><p>The pending save cannot be retried because this account no longer has supervisor access to its space. It may already have saved.</p>{!discarding ? <button type="button" className={`${button} mt-2`} disabled={blocked} onClick={() => setDiscarding(true)}>Discard retry details</button> : <div className="mt-2 flex gap-2"><button type="button" className={button} disabled={blocked} onClick={() => { pendingRef.current = null; setPending(null); setDiscarding(false); setSelected(spaces[0]?.id ?? ""); }}>Confirm discard</button><button type="button" className={button} onClick={() => setDiscarding(false)}>Keep retry details</button></div>}</div>}
     {message && <p role="status" className="mt-2">{message}</p>}

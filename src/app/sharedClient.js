@@ -27,7 +27,7 @@ export const sharedServiceMisconfigured = !sharedAccessDemo && !!import.meta.env
 export const sharedAccessEnabled = sharedAccessDemo || (!!hostedService && firebaseConfigured);
 
 const gateway = sharedAccessDemo ? (import.meta.env.VITE_SHARED_GATEWAY_PORT === "4176" ? "http://127.0.0.1:4176" : "http://127.0.0.1:4175") : hostedService;
-const paths = Object.freeze({ createSpace: "/v1/spaces", createInvitation: "/v1/invitations", previewInvitation: "/v1/invitations/preview", acceptInvitation: "/v1/invitations/accept", removeMember: "/v1/members/remove", listInvitations: "/v1/invitations/list", cancelInvitationById: "/v1/invitations/cancel-by-id", createDrive: "/v1/drives", editDrive: "/v1/drives/edit", createRoute: "/v1/routes" });
+const paths = Object.freeze({ createSpace: "/v1/spaces", createInvitation: "/v1/invitations", previewInvitation: "/v1/invitations/preview", acceptInvitation: "/v1/invitations/accept", removeMember: "/v1/members/remove", listInvitations: "/v1/invitations/list", cancelInvitationById: "/v1/invitations/cancel-by-id", createDrive: "/v1/drives", editDrive: "/v1/drives/edit", createRoute: "/v1/routes", deleteRoute: "/v1/routes/delete", deleteDrive: "/v1/drives/delete", leaveSpace: "/v1/spaces/leave", deleteSpace: "/v1/spaces/delete" });
 
 function currentUser(uid) {
   if (!sharedAccessEnabled || !auth || !db || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error("Shared spaces are unavailable.");

@@ -286,5 +286,86 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       return { driveId: drive.id, updated: true };
     });
   }
-  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive };
+  // Deleting a drive follows the edit rules: the manager may delete any drive, a
+  // supervisor only drives they recorded. The revision must match, so a drive that
+  // changed on another device is not deleted unseen. Repeating a delete is harmless.
+  async function deleteDrive({ idToken, spaceId, driveId, expectedRevision }) {
+    const caller = await identity(idToken);
+    if (typeof expectedRevision !== "string" || !/^(0|[1-9]\d{0,15})$/.test(expectedRevision)) throw new Error("Invalid drive details.");
+    const { space, member } = refs(spaceId, caller.uid);
+    const drive = space.collection("drives").doc(checkId(driveId));
+    return db.runTransaction(async (tx) => {
+      const [spaceSnap, actorSnap, driveSnap] = await tx.getAll(space, member, drive);
+      const actor = actorSnap.data();
+      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor"].includes(actor.role)) throw unauthorized();
+      if (!driveSnap.exists) return { deleted: false };
+      if (!((actor.role === "manager" && caller.uid === spaceSnap.data().managerUid) || (actor.role === "supervisor" && driveSnap.data().recordedByUid === caller.uid))) throw unauthorized();
+      if ((driveSnap.data().revision ?? 0) !== Number(expectedRevision)) throw new Error("Drive changed on another device.");
+      tx.delete(drive);
+      return { deleted: true };
+    });
+  }
+
+  // The manager or the route's creator may delete a route. Drives logged on it keep
+  // their own snapshot of the route, so history is unchanged.
+  async function deleteRoute({ idToken, spaceId, routeId }) {
+    const caller = await identity(idToken);
+    const { space, member } = refs(spaceId, caller.uid);
+    const route = space.collection("routes").doc(checkId(routeId));
+    return db.runTransaction(async (tx) => {
+      const [spaceSnap, actorSnap, routeSnap] = await tx.getAll(space, member, route);
+      const actor = actorSnap.data();
+      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor"].includes(actor.role)) throw unauthorized();
+      if (!routeSnap.exists) return { deleted: false };
+      if (!((actor.role === "manager" && caller.uid === spaceSnap.data().managerUid) || routeSnap.data().createdByUid === caller.uid)) throw unauthorized();
+      tx.delete(route);
+      return { deleted: true };
+    });
+  }
+
+  // A supervisor or learner may leave a space. Like removal by the manager, this
+  // ends their access and invalidates the space's pending invitations.
+  async function leaveSpace({ idToken, spaceId }) {
+    const caller = await identity(idToken);
+    const { space, member } = refs(spaceId, caller.uid);
+    const link = db.collection("users").doc(caller.uid).collection("spaceLinks").doc(space.id);
+    await db.runTransaction(async (tx) => {
+      const [spaceSnap, memberSnap] = await tx.getAll(space, member);
+      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !memberSnap.exists || memberSnap.data().active !== true || !["supervisor", "learner"].includes(memberSnap.data().role)) throw unauthorized();
+      tx.update(space, { invitationVersion: invitationVersion(spaceSnap.data()) + 1 });
+      tx.update(member, { active: false, leftAt: FieldValue.serverTimestamp() });
+      tx.delete(link);
+    });
+    return { left: true };
+  }
+
+  // The manager may delete the learner's whole space after typing the learner's name.
+  // The space is first marked "deleting", which stops every other change (all writes
+  // require an active space); then each member's discovery link and the space with all
+  // its drives, routes, memberships and invitations are deleted. A failed run can be
+  // repeated to finish the cleanup.
+  async function deleteSpace({ idToken, spaceId, confirmName }) {
+    const caller = await identity(idToken);
+    const { space, member } = refs(spaceId, caller.uid);
+    const ownLink = db.collection("users").doc(caller.uid).collection("spaceLinks").doc(space.id);
+    const state = await db.runTransaction(async (tx) => {
+      const [spaceSnap, managerSnap] = await tx.getAll(space, member);
+      if (!spaceSnap.exists) return "gone";
+      const data = spaceSnap.data();
+      if (data.managerUid !== caller.uid) throw unauthorized();
+      if (data.status === "deleting") return "resume";
+      if (!isManager(spaceSnap, managerSnap)) throw unauthorized();
+      if (typeof confirmName !== "string" || confirmName.trim() !== data.learnerName) throw new Error("Type the learner's name exactly to confirm.");
+      tx.update(space, { status: "deleting", deletingAt: FieldValue.serverTimestamp() });
+      return "started";
+    });
+    if (state === "gone") { await ownLink.delete(); return { deleted: false }; }
+    const members = await space.collection("members").get();
+    const writer = db.bulkWriter();
+    for (const doc of members.docs) writer.delete(db.collection("users").doc(doc.id).collection("spaceLinks").doc(space.id));
+    await writer.close();
+    await db.recursiveDelete(space);
+    return { deleted: true };
+  }
+  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive, deleteDrive, deleteRoute, leaveSpace, deleteSpace };
 }

@@ -30,7 +30,11 @@ These are implementation defaults derived from the requirements. The detailed wr
 | Create or edit a route within this space | Proposed: yes | Proposed: yes | View only initially |
 | Invite or remove a member | Yes | No | No |
 | Change another person's role or transfer management | Not in first implementation; recovery/transfer needs a separate process | No | No |
-| Delete a space, learner account, or historical records | Not enabled until deletion and retention behavior is designed | No | No |
+| Delete a drive | Yes, any drive (current revision only) | Their own entries only | No |
+| Delete a route | Yes | Routes they created | No |
+| Leave the space | No (delete the space instead) | Yes | Yes |
+| Delete the whole space (drives, routes, members, invitations) | Yes, after typing the learner's name | No | No |
+| Delete a sign-in account | Not in the app yet; on request to the project maintainer | No | No |
 
 Drive notes are shared with all active space members in this model; there is no private-note feature. A user interface must state that before a supervisor enters notes. Whether an invited supervisor may edit any member's drive, and whether learners may help create routes, remain product decisions. If a drive is edited by another authorized person, preserve both who recorded it and who last edited it; identify the person reported present separately.
 
@@ -63,6 +67,8 @@ Membership and invitation creation, acceptance, cancellation, and removal requir
 Do not use an email address typed into the UI alone as proof that the intended person controls the account. Specify and test how verified account identity and invitation delivery work before building the flow, including account recovery and protections against replay, forwarding, enumeration, and expired or revoked invitations. No invitation emails are sent by this design.
 
 ### Implementation status
+
+**November 13, 2026 update.** Deletion is implemented in the service (`deleteDrive`, `deleteRoute`, `leaveSpace`, `deleteSpace`) with the permissions in the table above. Deleting a drive requires its current revision, so a drive changed on another device is not removed unseen. Deleting a route leaves logged drives' route snapshots in place. Leaving works like removal: access ends, the discovery link is deleted, and pending invitations for the space are invalidated. Deleting a space first marks it `deleting`, which blocks every other change because all writes require an active space; it then deletes every member's discovery link and the space with all subcollections. A failed deletion can be repeated by the manager to finish. Firestore rules still deny all client deletes.
 
 **November 12, 2026 update.**
 - The single-supervisor workspace (`users/{uid}/learners`, `users/{uid}/drives`) and its backup and import were removed. The rules now deny those paths.

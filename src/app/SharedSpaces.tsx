@@ -4,6 +4,7 @@ import SharedPractice from "./SharedPractice";
 import SharedRoutes from "./SharedRoutes";
 import SharedDashboard from "./SharedDashboard";
 import type { TimerDraft } from "./DriveTimer";
+import { dangerButton } from "./design";
 
 type Space = { id: string; learnerName: string; role: string };
 type Preview = { learnerName: string; role: string; expiresAt: number };
@@ -39,6 +40,7 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
   // Bumped whenever a route is saved, so the drive form picks it up without a manual refresh.
   const [routesVersion, setRoutesVersion] = useState(0);
   const [dashboardSpace, setDashboardSpace] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState("");
   const busyRef = useRef(false);
   const generation = useRef(0);
   const memberGeneration = useRef(0);
@@ -46,7 +48,7 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
   const invitationLoading = useRef(false);
   const alive = useRef(false);
   useEffect(() => { alive.current = true; return () => { alive.current = false; generation.current += 1; memberGeneration.current += 1; invitationGeneration.current += 1; onBusyChange(false); }; }, [onBusyChange]);
-  useEffect(() => { setIssued(null); setRemoving(null); setCancelling(null); }, [selected]);
+  useEffect(() => { setIssued(null); setRemoving(null); setCancelling(null); setConfirmDelete(""); }, [selected]);
   const refresh = useCallback(async () => {
     const request = ++generation.current;
     if (!verified) { setSpaces([]); setSelected(""); return false; }
@@ -124,10 +126,10 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
     {spaces.length === 0 && page !== "shared" && <p className="mt-3 text-sm">Add a learner in <button type="button" className="text-[#0C7A8D] underline" onClick={() => onNavigate("shared")}>People &amp; access</button> to get started.</p>}
     {onDashboard && <SharedDashboard uid={uid} spaces={spaces} blocked={blocked} onNavigate={onNavigate} preferredSpace={dashboardSpace} onSelect={setDashboardSpace} onLogDrive={(spaceId, draft) => { setLogRequest({ spaceId, nonce: crypto.randomUUID(), draft }); onNavigate("logs"); }} />}
     <div hidden={page !== "logs"}><SharedPractice uid={uid} spaces={spaces} blocked={blocked} run={run} createdRoute={createdRoute} logRequest={logRequest} visible={page === "logs"} routesVersion={routesVersion} onCreateRoute={(spaceId) => { onNavigate("routes"); setRouteRequest({ spaceId, nonce: crypto.randomUUID() }); }} /></div>
-    <div hidden={page !== "routes"}><SharedRoutes uid={uid} spaces={spaces} blocked={blocked} run={run} createRequest={routeRequest} activePage={page === "routes"} onCreated={(spaceId, routeId) => { setRoutesVersion((value) => value + 1); if (routeRequest?.spaceId === spaceId) { setCreatedRoute({ spaceId, routeId, nonce: crypto.randomUUID() }); setRouteRequest(null); onNavigate("logs"); } }} /></div>
+    <div hidden={page !== "routes"}><SharedRoutes uid={uid} spaces={spaces} blocked={blocked} run={run} createRequest={routeRequest} activePage={page === "routes"} onDeleted={() => setRoutesVersion((value) => value + 1)} onCreated={(spaceId, routeId) => { setRoutesVersion((value) => value + 1); if (routeRequest?.spaceId === spaceId) { setCreatedRoute({ spaceId, routeId, nonce: crypto.randomUUID() }); setRouteRequest(null); onNavigate("logs"); } }} /></div>
     <div hidden={page !== "shared"}>
     <p className="mt-3 text-sm text-muted-foreground">Use fictional data. Invitations are not emailed: share the invitation code with the person yourself.</p>
-    {spaces.length > 0 && <ul className="mt-2 space-y-1 text-sm" aria-label="Shared spaces">{spaces.map((space) => <li key={space.id}>{space.learnerName} · {space.role}</li>)}</ul>}
+    {spaces.length > 0 && <ul className="mt-2 space-y-1 text-sm" aria-label="Shared spaces">{spaces.map((space) => <li key={space.id} className="flex flex-wrap items-center gap-2"><span>{space.learnerName} · {space.role}</span>{space.role !== "manager" && <button type="button" className={dangerButton} disabled={blocked} onClick={() => { if (!window.confirm(`Leave ${space.learnerName}’s space? You will lose access to their routes and practice history. The managing supervisor can invite you again.`)) return; void run(async () => { await sharedAccessRequest(uid, "leaveSpace", { spaceId: space.id }); await refresh(); if (alive.current) setStatus(`You left ${space.learnerName}’s space.`); }); }}>Leave space</button>}</li>)}</ul>}
     <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); void run(async () => { await sharedAccessRequest(uid, "createSpace", { learnerName: learnerName.trim() }); setLearnerName(""); const loaded = await refresh(); setStatus(loaded ? "Learner space created." : "Learner space created, but the list could not refresh."); }); }}>
       <label className="text-sm">Learner name for shared space<input className={`${field} mt-1`} value={learnerName} maxLength={60} required disabled={blocked} onChange={(event) => setLearnerName(event.target.value)} /></label><button className={button} disabled={blocked}>Create shared space</button>
     </form>
@@ -152,6 +154,19 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
       {invitationCursor && <button type="button" className={`${button} mt-2`} disabled={busy || disabled || !verified || invitationsLoading} onClick={() => void loadMoreInvitations()}>{invitationsLoading ? "Loading invitations…" : "Load more invitations"}</button>}
       {cancelling && <div className="mt-3 rounded-lg border border-amber-400 p-3"><p>Cancel the {cancelling.role} invitation for {cancelling.recipientEmail}? This will prevent its acceptance.</p><div className="mt-2 flex gap-2"><button type="button" className={button} disabled={blocked} onClick={() => void run(async () => { await sharedAccessRequest(uid, "cancelInvitationById", { spaceId: selected, invitationId: cancelling.id }); setCancelling(null); setIssued(null); await refreshInvitations(); setStatus("Invitation cancelled."); })}>Confirm cancellation</button><button type="button" className={button} disabled={busy} onClick={() => setCancelling(null)}>Keep invitation</button></div></div>}
     </div>}
+    {selected && (() => {
+      const target = spaces.find((space) => space.id === selected && space.role === "manager");
+      if (!target) return null;
+      const matches = confirmDelete.trim() === target.learnerName;
+      return <div className="mt-4 rounded-xl border border-red-200 bg-red-50/40 p-4 text-sm" aria-label="Delete learner space">
+        <h4 className="font-semibold text-red-800">Delete {target.learnerName}’s space</h4>
+        <p className="mt-1 text-muted-foreground">Permanently deletes all of {target.learnerName}’s drives, routes, notes and invitations, and removes everyone’s access. This can’t be undone. Print or save the practice log first if you want to keep a record.</p>
+        <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); if (!matches) return; const name = target.learnerName; void run(async () => { await sharedAccessRequest(uid, "deleteSpace", { spaceId: target.id, confirmName: confirmDelete.trim() }); setConfirmDelete(""); await refresh(); if (alive.current) setStatus(`${name}’s space was deleted.`); }); }}>
+          <label className="text-sm">Type <strong>{target.learnerName}</strong> to confirm<input className={`${field} mt-1`} value={confirmDelete} autoComplete="off" disabled={blocked} onChange={(event) => setConfirmDelete(event.target.value)} /></label>
+          <button className={dangerButton} disabled={blocked || !matches}>Delete learner space</button>
+        </form>
+      </div>;
+    })()}
     {issued && <div className="mt-3 space-y-2 rounded-lg bg-card p-3 text-sm"><p>Share these test values privately. This code grants an invitation to the intended verified account; no message was sent.</p><label className="block">Invitation space ID<input className={`${field} mt-1`} value={issued.spaceId} readOnly /></label><label className="block">Invitation code to share<input className={`${field} mt-1`} value={issued.token} readOnly /></label></div>}
     <form className="mt-4 grid gap-2 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setPreview(null); void run(async () => { const result = await sharedAccessRequest(uid, "previewInvitation", { spaceId: joinSpace.trim(), token: joinToken.trim() }); setPreview(result); setStatus(""); }); }}>
       <label className="text-sm">Received space ID<input className={`${field} mt-1`} value={joinSpace} autoComplete="off" required disabled={blocked} onChange={(event) => { setJoinSpace(event.target.value); setPreview(null); }} /></label>
