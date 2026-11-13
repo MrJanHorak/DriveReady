@@ -27,7 +27,7 @@ export default function Privacy() {
         <ul className="list-disc space-y-1.5 pl-5">
           <li><strong>Your account:</strong> your email address and sign-in, handled by Google Firebase Authentication. DriveReady never sees your password.</li>
           <li><strong>Learner spaces:</strong> the learner name or nickname you enter, who belongs to the space and their role, and the email each person had when they joined.</li>
-          <li><strong>Practice:</strong> drive dates, minutes, night minutes, skills and conditions, shared notes, routes (name, start and destination descriptions, and map points), who recorded or last edited a drive, and the supervisor reported as present.</li>
+          <li><strong>Practice:</strong> drive dates, minutes, night minutes, skills and conditions, shared notes, the learner’s own reflections, routes (name, start and destination descriptions, and map points), whether a learner’s suggested route was approved and any reason given, who recorded or last edited a drive, and the supervisor reported as present.</li>
           <li><strong>Invitations:</strong> the invitee’s email and role. Invitation codes are stored only in scrambled (hashed) form.</li>
           <li><strong>On your device only:</strong> your sign-in session and a running drive timer are kept in this browser’s storage. A timer is cleared once its drive is saved or discarded. Start times you type into the drive form are used for the night-minutes suggestion and are not saved with the drive.</li>
         </ul>

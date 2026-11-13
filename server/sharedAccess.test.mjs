@@ -221,7 +221,7 @@ test("shared drives require active supervisors, preserve attribution and reject 
   assert.equal((await getDocFromServer(doc(learner.db, `spaces/${spaceId}/drives/${input.operationId}`))).data().recordedByUid, adult.uid);
 });
 
-test("shared routes are private, supervisor-created and retryable", async () => {
+test("shared routes are private, member-created and retryable", async () => {
   const suffix = randomUUID();
   const manager = await account(`manager-route-${suffix}`), adult = await account(`adult-route-${suffix}`), learner = await account(`learner-route-${suffix}`), outsider = await account(`outsider-route-${suffix}`);
   const { spaceId } = await service.createSpace({ idToken: manager.token, learnerName: "Route learner" });
@@ -231,7 +231,6 @@ test("shared routes are private, supervisor-created and retryable", async () => 
     await service.acceptInvitation({ idToken: person.token, spaceId, token: invite.token });
   }
   const input = { spaceId, operationId: randomUUID(), name: "Fictional route", start: "Example start", destination: "Example destination", geometry, roadPolyline: testRoadPolyline };
-  await assert.rejects(service.createRoute({ ...input, idToken: learner.token }), /Not authorized/);
   await assert.rejects(service.createRoute({ ...input, idToken: outsider.token }), /Not authorized/);
   await assert.rejects(service.createRoute({ ...input, idToken: adult.token, spaceId: sibling.spaceId }), /Not authorized/);
   for (const changes of [{ name: "  " }, { start: "x".repeat(161) }, { destination: "line\nbreak" }, { operationId: "bad/id" }]) await assert.rejects(service.createRoute({ ...input, ...changes, idToken: adult.token }), /Invalid route details/);
@@ -482,4 +481,54 @@ test("account deletion revokes other sessions before removing anything", async (
   await signInWithEmailAndPassword(learner.auth, learner.email, "synthetic-password-123");
   const fresh = await learner.auth.currentUser.getIdToken(true);
   assert.deepEqual(await service.deleteAccount({ idToken: fresh, confirmEmail: learner.email }), { deleted: true });
+});
+
+test("a learner's route is a proposal until the manager approves it", async () => {
+  const { manager, supervisor, learner, outsider, spaceId, routeId: supervisorRoute } = await deletionFixture("proposal");
+  currentTime = Date.now();
+  const route = (operationId, name) => ({ spaceId, operationId, name, start: "Fictional start", destination: "Fictional end", geometry, roadPolyline: testRoadPolyline });
+  const proposedId = randomUUID(), declinedId = randomUUID();
+  assert.deepEqual(await service.createRoute({ ...route(proposedId, "Learner idea"), idToken: learner.token }), { routeId: proposedId, created: true, status: "proposed" });
+  assert.equal((await db.doc(`spaces/${spaceId}/routes/${supervisorRoute}`).get()).data().status, "approved", "adults' routes need no approval");
+  const drive = (routeId) => ({ idToken: supervisor.token, spaceId, operationId: randomUUID(), date: "2026-11-02", minutes: "30", nightMinutes: "0", notes: "", supervisorPresentUid: supervisor.uid, routeId });
+  await assert.rejects(service.createDrive(drive(proposedId)), /waiting for the managing supervisor/);
+
+  for (const person of [supervisor, learner, outsider]) await assert.rejects(service.reviewRoute({ idToken: person.token, spaceId, routeId: proposedId, decision: "approve" }), /Not authorized/);
+  await assert.rejects(service.reviewRoute({ idToken: manager.token, spaceId, routeId: proposedId, decision: "maybe" }), /Invalid review/);
+  await assert.rejects(service.reviewRoute({ idToken: manager.token, spaceId, routeId: supervisorRoute, decision: "decline" }), /Only a proposed route/);
+  assert.deepEqual(await service.reviewRoute({ idToken: manager.token, spaceId, routeId: proposedId, decision: "approve" }), { status: "approved", updated: true });
+  assert.deepEqual(await service.reviewRoute({ idToken: manager.token, spaceId, routeId: proposedId, decision: "approve" }), { status: "approved", updated: false }, "repeating is harmless");
+  await assert.rejects(service.reviewRoute({ idToken: manager.token, spaceId, routeId: proposedId, decision: "decline" }), /Only a proposed route/);
+  assert.equal((await service.createDrive(drive(proposedId))).created, true);
+
+  await service.createRoute({ ...route(declinedId, "Busy road"), idToken: learner.token });
+  assert.deepEqual(await service.reviewRoute({ idToken: manager.token, spaceId, routeId: declinedId, decision: "decline", reason: "  Too busy at rush hour  " }), { status: "declined", updated: true });
+  const declined = (await db.doc(`spaces/${spaceId}/routes/${declinedId}`).get()).data();
+  assert.equal(declined.status, "declined");
+  assert.equal(declined.declineReason, "Too busy at rush hour");
+  await assert.rejects(service.createDrive(drive(declinedId)), /waiting for the managing supervisor/);
+  await assert.rejects(service.deleteRoute({ idToken: supervisor.token, spaceId, routeId: declinedId }), /Not authorized/);
+  assert.deepEqual(await service.deleteRoute({ idToken: learner.token, spaceId, routeId: declinedId }), { deleted: true }, "learners can remove their own routes");
+  await assert.rejects(service.deleteRoute({ idToken: learner.token, spaceId, routeId: supervisorRoute }), /Not authorized/);
+});
+
+test("learners can add their own reflection to a drive without changing the record", async () => {
+  const { manager, supervisor, learner, outsider, spaceId, drive } = await deletionFixture("reflection");
+  currentTime = Date.now();
+  const driveId = await drive(supervisor);
+  for (const person of [manager, supervisor, outsider]) await assert.rejects(service.setReflection({ idToken: person.token, spaceId, driveId, reflection: "Not mine" }), /Not authorized/);
+  await assert.rejects(service.setReflection({ idToken: learner.token, spaceId, driveId, reflection: "x".repeat(1001) }), /Invalid reflection/);
+  await assert.rejects(service.setReflection({ idToken: learner.token, spaceId, driveId: "missing", reflection: "Hi" }), /Not authorized/);
+  assert.deepEqual(await service.setReflection({ idToken: learner.token, spaceId, driveId, reflection: "  Left turns felt easier.  " }), { saved: true });
+  let saved = (await getDocFromServer(doc(supervisor.db, `spaces/${spaceId}/drives/${driveId}`))).data();
+  assert.equal(saved.learnerReflection, "Left turns felt easier.");
+  assert.equal(saved.learnerReflectionByUid, learner.uid);
+  assert.equal(saved.revision ?? 0, 0, "the supervisor's record and its revision are unchanged");
+  assert.equal(saved.recordedByUid, supervisor.uid);
+  await service.editDrive({ idToken: supervisor.token, spaceId, driveId, operationId: randomUUID(), expectedRevision: "0", date: "2026-11-01", minutes: "35", nightMinutes: "0", notes: "Good", practicedSkills: "", practicedConditions: "" });
+  assert.equal((await db.doc(`spaces/${spaceId}/drives/${driveId}`).get()).data().learnerReflection, "Left turns felt easier.", "supervisor edits keep the reflection");
+  await service.setReflection({ idToken: learner.token, spaceId, driveId, reflection: "   " });
+  saved = (await db.doc(`spaces/${spaceId}/drives/${driveId}`).get()).data();
+  assert.equal(saved.learnerReflection, undefined);
+  assert.equal(saved.learnerReflectionAt, undefined);
 });

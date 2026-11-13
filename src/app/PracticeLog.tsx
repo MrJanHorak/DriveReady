@@ -6,7 +6,7 @@ import { auth } from "./firebaseClient";
 import { formatDate, formatDuration } from "./SharedDashboard";
 import { ghostButton, heading, mono, primaryButton } from "./design";
 
-type LogDrive = { id: string; date: string; minutes: number; nightMinutes: number; notes?: string; supervisorPresentUid?: string; routeSnapshot?: { name?: string }; practicedSkills?: string[]; practicedConditions?: string[] };
+type LogDrive = { id: string; date: string; minutes: number; nightMinutes: number; notes?: string; learnerReflection?: string; supervisorPresentUid?: string; routeSnapshot?: { name?: string }; practicedSkills?: string[]; practicedConditions?: string[] };
 
 // Georgia DDS describes 40 supervised hours, 6 of them at night (see State Requirements).
 const TARGET_HOURS = 40, TARGET_NIGHT_HOURS = 6;
@@ -99,7 +99,7 @@ export default function PracticeLog({ uid, spaceId, learnerName, onClose }: { ui
             <td className="whitespace-nowrap py-2 pr-3">{drive.nightMinutes ? formatDuration(drive.nightMinutes) : "—"}</td>
             <td className="py-2 pr-3">{[...(drive.practicedSkills ?? []), ...(drive.practicedConditions ?? [])].join(", ") || "—"}</td>
             <td className="py-2 pr-3 break-all">{drive.supervisorPresentUid ? supervisors[drive.supervisorPresentUid] ?? "Supervisor" : "—"}</td>
-            <td className="py-2 pr-3">{drive.notes || "—"}</td>
+            <td className="py-2 pr-3">{drive.notes || "—"}{drive.learnerReflection && <span className="mt-1 block italic text-muted-foreground">Learner: {drive.learnerReflection}</span>}</td>
           </tr>)}</tbody>
           <tfoot><tr className="border-t-2 border-[#1A2332]/20 font-semibold"><td className="py-2 pr-3">Total</td><td /><td className="whitespace-nowrap py-2 pr-3">{formatDuration(total)}</td><td className="whitespace-nowrap py-2 pr-3">{formatDuration(night)}</td><td colSpan={3} /></tr></tfoot>
         </table> : <p className="mt-6 text-sm">No drives have been logged for {learnerName} yet.</p>}

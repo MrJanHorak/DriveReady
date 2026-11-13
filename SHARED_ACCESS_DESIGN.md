@@ -27,16 +27,18 @@ These are implementation defaults derived from the requirements. The detailed wr
 | View learner profile, shared routes, full drive history, shared notes and progress | Yes | Yes | Yes |
 | Create a drive and identify the supervisor reported present | Yes | Yes | No |
 | Edit a drive | Yes | Proposed: their own entries only | No |
-| Create or edit a route within this space | Proposed: yes | Proposed: yes | View only initially |
+| Create a route within this space | Yes, usable at once | Yes, usable at once | Yes, as a suggestion awaiting approval |
+| Approve or decline a learner's suggested route | Yes (with an optional reason the learner sees) | No | No |
+| Add a reflection to a drive | No | No | Yes, their own reflection on any drive in their space |
 | Invite or remove a member | Yes | No | No |
 | Change another person's role or transfer management | Not in first implementation; recovery/transfer needs a separate process | No | No |
 | Delete a drive | Yes, any drive (current revision only) | Their own entries only | No |
-| Delete a route | Yes | Routes they created | No |
+| Delete a route | Yes | Routes they created | Routes they suggested |
 | Leave the space | No (delete the space instead) | Yes | Yes |
 | Delete the whole space (drives, routes, members, invitations) | Yes, after typing the learner's name | No | No |
 | Delete their own sign-in account | Yes, after deleting the spaces they manage | Yes | Yes |
 
-Drive notes are shared with all active space members in this model; there is no private-note feature. A user interface must state that before a supervisor enters notes. Whether an invited supervisor may edit any member's drive, and whether learners may help create routes, remain product decisions. If a drive is edited by another authorized person, preserve both who recorded it and who last edited it; identify the person reported present separately.
+Drive notes are shared with all active space members in this model; there is no private-note feature. A user interface must state that before a supervisor enters notes. Whether an invited supervisor may edit any member's drive remains a product decision. Learners may suggest routes, which the managing supervisor approves (November 13, 2026). If a drive is edited by another authorized person, preserve both who recorded it and who last edited it; identify the person reported present separately.
 
 ## Data boundaries
 
@@ -69,6 +71,20 @@ Do not use an email address typed into the UI alone as proof that the intended p
 ### Implementation status
 
 **November 13, 2026 update.** Deletion is implemented in the service (`deleteDrive`, `deleteRoute`, `leaveSpace`, `deleteSpace`) with the permissions in the table above. Deleting a drive requires its current revision, so a drive changed on another device is not removed unseen. Deleting a route leaves logged drives' route snapshots in place. Leaving works like removal: access ends, the discovery link is deleted, and pending invitations for the space are invalidated. Deleting a space first marks it `deleting`, which blocks every other change because all writes require an active space; it then deletes every member's discovery link and the space with all subcollections. A failed deletion can be repeated by the manager to finish. Firestore rules still deny all client deletes.
+
+**Learner contributions (November 13, 2026).** Learners can now take part instead of only reading:
+
+- *Suggested routes.* A learner draws a route like anyone else, but it is saved with `status: "proposed"`. Only the managing supervisor, as the responsible adult, can approve it (`status: "approved"`) or decline it with an optional reason of up to 300 characters, which the learner sees. Only approved routes can be chosen for a new drive; the service enforces this, and the app shows proposals as "awaiting approval" in the drive form. A declined route can still be approved later; an approved one stays approved. Routes created by supervisors and the manager are approved when saved, and older routes without a status count as approved. Learners can delete the routes they suggested.
+- *Reflections.* A learner can add, change or remove their own reflection (up to 1,000 characters) on any drive in their space. It is stored on the drive as `learnerReflection`, separate from the supervisor's notes, does not change the drive's revision or attribution, and survives supervisor edits. Everyone in the space can read it, and it appears in the printable practice log.
+
+**Public route library (planned, phase 2).** Decided November 13, 2026:
+
+- Only an *approved* route can be published, and only the managing supervisor can publish it (a learner can ask, the manager decides). Publishing goes live immediately, with no separate moderator review; reporting and unpublishing are the safeguards.
+- The library is visible to signed-in DriveReady users only, never to anonymous visitors or search engines.
+- The public copy is a separate record (for example `publicRoutes/{id}`) with no learner name, space ID, member IDs or emails. It holds the route name, a short description, the general area, suggested skills and conditions, and the line with roughly the first and last 300 m trimmed off, so it never shows where a learner starts or ends (often home). Start and destination descriptions are not copied.
+- The manager can unpublish at any time; deleting the space or the source route unpublishes it too. Any signed-in user can report a route with a reason; reported routes are reviewed by the project owner, who can remove them.
+- Families can browse the library on a map, filter by skill, and save a copy into a learner's space, where it is an ordinary approved route.
+- Votes and use counts come later and must not reveal who drove a route or when.
 
 **Invitation links (November 13, 2026).** The app turns a new invitation into a link, `<app address>#invite=<spaceId>.<code>`, which the manager copies or shares (the phone share sheet where available). The code is only in the fragment, which browsers don't send to the web host or include in referrers. On opening, the app moves the invitation into the tab's session storage, removes the fragment from the address bar and history, and sends the invitee to People & access. A signed-out invitee is told to sign in with the invited email; once signed in and verified, the app previews the invitation automatically and shows a single **Accept invitation** button. A preview grants and changes nothing, so a refused one (expired, cancelled, used, wrong account) only explains itself and doesn't block the page. "Not now" forgets the link in that tab but doesn't cancel it. Pasting a link into **Invitation link you received** follows the same path. The service checks are unchanged.
 

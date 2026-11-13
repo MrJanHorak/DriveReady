@@ -4,11 +4,12 @@ import { readSharedDrives, readSharedRoutes } from "./sharedClient";
 import DriveTimer, { type TimerDraft } from "./DriveTimer";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
 import type { RoutePoint } from "./RouteMap";
+import { routeStatus } from "./routeStatus";
 import { Badge, Card, CardHeader, ProgressBar, ProgressRing, RouteSketch, SkillTag, ghostButton, heading, mono, primaryButton } from "./design";
 
 type Space = { id: string; learnerName: string; role: string };
 type Drive = { id: string; date: string; minutes: number; nightMinutes: number; routeId?: string; routeSnapshot?: { name: string }; practicedSkills?: string[]; practicedConditions?: string[] };
-type Route = { id: string; name: string; start: string; destination: string; geometry?: RoutePoint[]; roadPolyline?: string };
+type Route = { id: string; name: string; start: string; destination: string; geometry?: RoutePoint[]; roadPolyline?: string; status?: string };
 
 // Georgia DDS describes 40 supervised hours, including 6 at night (see State Requirements).
 const TARGET_HOURS = 40, TARGET_NIGHT_HOURS = 6;
@@ -178,7 +179,7 @@ export default function SharedDashboard({ uid, spaces, blocked, onNavigate, onLo
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold leading-snug text-foreground" style={heading}>{route.name}</h3>
             <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{route.start} → {route.destination}</p>
-            <p className="mt-2.5 inline-flex items-center gap-1 text-xs text-muted-foreground" style={mono}><RouteIcon size={11} aria-hidden="true" />{use ? `Driven ${use.count}× · last ${formatDate(use.last)}` : "Not driven yet"}</p>
+            <p className="mt-2.5 inline-flex items-center gap-1 text-xs text-muted-foreground" style={mono}><RouteIcon size={11} aria-hidden="true" />{routeStatus(route) === "proposed" ? "Awaiting approval" : routeStatus(route) === "declined" ? "Not approved" : use ? `Driven ${use.count}× · last ${formatDate(use.last)}` : "Not driven yet"}</p>
           </div>
         </article>;
       })}</div> : <p className="p-5 text-sm text-muted-foreground">No routes yet. Draw one on the map to plan a practice drive.</p>}

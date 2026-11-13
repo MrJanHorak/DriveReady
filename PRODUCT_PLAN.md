@@ -77,8 +77,8 @@ Community routes and tips need reporting, moderation, and a way to flag outdated
 ## Decisions to make next
 
 1. **Accounts and access:** How are learner accounts created and connected, and what can learners, the managing supervisor, and invited supervisors view or change? How are invitations, lost access, removal, and changing the managing supervisor handled?
-2. **Routes:** What route editing and mapping experience is needed first? Are new routes private, shared with the learner's space, or public by default? Can learners submit or vote?
-3. **Moderation:** Who reviews reports, what reasons are available, and when should a reported route be temporarily hidden? How are voting abuse, appeals, and outdated routes handled?
+2. **Routes:** What route editing and mapping experience is needed first? Are new routes private, shared with the learner's space, or public by default? Can learners submit or vote? *Decided November 13, 2026:* routes are private to the learner's space; learners may suggest routes, which the managing supervisor approves; approved routes can be published to a signed-in-only public library by the manager (see SHARED_ACCESS_DESIGN.md).
+3. **Moderation:** Who reviews reports, what reasons are available, and when should a reported route be temporarily hidden? How are voting abuse, appeals, and outdated routes handled? *Decided November 13, 2026:* publishing is live immediately; reporting with a reason and owner removal are the safeguards for the pilot.
 4. **Route-use counts:** What qualifies as a logged use, how should edits or deleted logs affect the count, and what should be shown publicly without identifying a learner or revealing a trip?
 5. **Learning and notes:** Which notes are visible to the learner and invited supervisors, and what feedback and theory content should follow the initial release? Who authors and reviews learning content?
 6. **Privacy and operations:** How will data deletion, retention, access to accounts belonging to minors, backups, recovery, and support work before real family data is used?

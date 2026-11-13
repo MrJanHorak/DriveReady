@@ -55,6 +55,9 @@ function routeGeometry(value) {
   return points.map(({ lat, lng }) => ({ lat, lng }));
 }
 
+// Routes saved before approval existed have no status and count as approved.
+const routeApproved = (route) => route.status === undefined || route.status === "approved";
+
 export function createSharedAccessService({ db, auth, now = Date.now }) {
   async function identity(idToken) {
     try {
@@ -232,6 +235,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       if (!route) throw new Error("Choose a saved route before recording a drive.");
       if (route && !routeSnap.exists) throw new Error("Route is unavailable in this space.");
       if (!routeSnap.data().geometry) throw new Error("Choose a mapped route before recording a drive.");
+      if (!routeApproved(routeSnap.data())) throw new Error("This route is waiting for the managing supervisor's approval.");
       routeGeometry(JSON.stringify(routeSnap.data().geometry));
       const routeDetails = route ? { routeId, routeSnapshot: { name: routeSnap.data().name, start: routeSnap.data().start, destination: routeSnap.data().destination, ...(routeSnap.data().geometry ? { geometry: routeSnap.data().geometry } : {}), ...(routeSnap.data().roadPolyline ? { roadPolyline: routeSnap.data().roadPolyline } : {}) } } : {};
       tx.create(drive, { ...data, practicedSkills: skills, practicedConditions: conditions, ...routeDetails, createdAt: FieldValue.serverTimestamp() });
@@ -251,15 +255,17 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     return db.runTransaction(async (tx) => {
       const [spaceSnap, actorSnap, existing] = await tx.getAll(space, member, route);
       const actor = actorSnap.data();
-      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor"].includes(actor.role) || (actor.role === "manager" && caller.uid !== spaceSnap.data().managerUid)) throw unauthorized();
+      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor", "learner"].includes(actor.role) || (actor.role === "manager" && caller.uid !== spaceSnap.data().managerUid)) throw unauthorized();
       if (existing.exists) {
         if (!Object.entries(data).every(([key, value]) => existing.data()[key] === value) || JSON.stringify(existing.data().geometry ?? null) !== JSON.stringify(geometry) || (existing.data().roadPolyline ?? "") !== roadPolyline) throw new Error("Route operation conflicts with an existing record.");
         return { routeId: route.id, created: false };
       }
       if (!geometry) throw new Error("Draw a route with at least two map points.");
       if (!roadPolyline) throw new Error("Find a road route before saving.");
-      tx.create(route, { ...data, geometry, ...(roadPolyline ? { roadPolyline } : {}), createdAt: FieldValue.serverTimestamp() });
-      return { routeId: route.id, created: true };
+      // A learner's route is a proposal until the managing supervisor approves it.
+      const status = actor.role === "learner" ? "proposed" : "approved";
+      tx.create(route, { ...data, status, geometry, ...(roadPolyline ? { roadPolyline } : {}), createdAt: FieldValue.serverTimestamp() });
+      return { routeId: route.id, created: true, status };
     });
   }
   async function editDrive({ idToken, spaceId, driveId, operationId, expectedRevision, date, minutes, nightMinutes, notes, practicedSkills, practicedConditions }) {
@@ -316,7 +322,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     return db.runTransaction(async (tx) => {
       const [spaceSnap, actorSnap, routeSnap] = await tx.getAll(space, member, route);
       const actor = actorSnap.data();
-      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor"].includes(actor.role)) throw unauthorized();
+      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor", "learner"].includes(actor.role)) throw unauthorized();
       if (!routeSnap.exists) return { deleted: false };
       if (!((actor.role === "manager" && caller.uid === spaceSnap.data().managerUid) || routeSnap.data().createdByUid === caller.uid)) throw unauthorized();
       tx.delete(route);
@@ -407,5 +413,41 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     try { await auth.deleteUser(caller.uid); } catch (error) { if (error?.code !== "auth/user-not-found") throw error; }
     return { deleted: true };
   }
-  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive, deleteDrive, deleteRoute, leaveSpace, deleteSpace, deleteAccount };
+  // The managing supervisor approves or declines a route a learner proposed. Only
+  // approved routes can be used to log drives. Repeating the same decision is harmless;
+  // a declined route can still be approved later, but an approved one stays approved.
+  async function reviewRoute({ idToken, spaceId, routeId, decision, reason = "" }) {
+    const caller = await identity(idToken);
+    if (!["approve", "decline"].includes(decision) || typeof reason !== "string" || reason.length > 300 || /[\u0000-\u0008\u000b-\u001f]/.test(reason)) throw new Error("Invalid review.");
+    const { space, member } = refs(spaceId, caller.uid);
+    const route = space.collection("routes").doc(checkId(routeId));
+    return db.runTransaction(async (tx) => {
+      const [spaceSnap, managerSnap, routeSnap] = await tx.getAll(space, member, route);
+      if (!isManager(spaceSnap, managerSnap) || spaceSnap.data().managerUid !== caller.uid || !routeSnap.exists) throw unauthorized();
+      const current = routeSnap.data().status;
+      const target = decision === "approve" ? "approved" : "declined";
+      if (current === target) return { status: target, updated: false };
+      if (!["proposed", "declined"].includes(current) || (target === "declined" && current !== "proposed")) throw new Error("Only a proposed route can be reviewed.");
+      tx.update(route, { status: target, reviewedByUid: caller.uid, reviewedAt: FieldValue.serverTimestamp(), declineReason: target === "declined" ? reason.trim() : FieldValue.delete() });
+      return { status: target, updated: true };
+    });
+  }
+
+  // The learner adds their own reflection to a drive in their space: what went well,
+  // what to practise. It is shared with everyone in the space and never changes the
+  // supervisor's record. An empty reflection removes it.
+  async function setReflection({ idToken, spaceId, driveId, reflection }) {
+    const caller = await identity(idToken);
+    if (typeof reflection !== "string" || reflection.length > 1000) throw new Error("Invalid reflection.");
+    const { space, member } = refs(spaceId, caller.uid);
+    const drive = space.collection("drives").doc(checkId(driveId));
+    const text = reflection.trim();
+    return db.runTransaction(async (tx) => {
+      const [spaceSnap, memberSnap, driveSnap] = await tx.getAll(space, member, drive);
+      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !memberSnap.exists || memberSnap.data().active !== true || memberSnap.data().role !== "learner" || !driveSnap.exists) throw unauthorized();
+      tx.update(drive, text ? { learnerReflection: text, learnerReflectionByUid: caller.uid, learnerReflectionAt: FieldValue.serverTimestamp() } : { learnerReflection: FieldValue.delete(), learnerReflectionByUid: FieldValue.delete(), learnerReflectionAt: FieldValue.delete() });
+      return { saved: true };
+    });
+  }
+  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive, deleteDrive, deleteRoute, leaveSpace, deleteSpace, deleteAccount, reviewRoute, setReflection };
 }

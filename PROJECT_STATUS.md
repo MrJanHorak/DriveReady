@@ -18,6 +18,7 @@ DriveReady is deployed for development: the web app on Vercel (https://drive-rea
 | Practice log | Printable one-learner log with totals, every drive and signature lines; prints or saves as PDF through the browser. Supervisor emails show for managers; others see "Supervisor". |
 | Deletion | Drives, routes, leaving a space, deleting a whole space (manager, name confirmation), and deleting your own account (email and password confirmation; managers delete their spaces first); permanent. |
 | Privacy notice | In-app plain-language page (not a reviewed policy); linked from sign-in. The contact address is a placeholder (`src/app/contact.js`). |
+| Learner contributions | Learners suggest routes (the managing supervisor approves or declines them before they can be used) and add reflections to drives (November 13). |
 | People & access | Figma-styled page (November 13): learner spaces, joining with a link, and a manage card per learner with people, invitation links (copy or share; the invitee reviews and joins in one tap), pending invitations, removal and space deletion. |
 | Shared service | Deployed (`server/main.mjs`): origin allow-list, rate limit, request logs that record no content. |
 | Code health | Unused Figma-export kit and about 50 unused dependencies removed; strict TypeScript check (`npm run typecheck`) passes. |
@@ -29,12 +30,13 @@ All suites pass as of this update: unit (`npm test`), type check, rules, service
 
 1. **CI (added November 12):** `.github/workflows/ci.yml` runs every suite and the build on each push and pull request. Optionally require it through branch protection on `main`.
 2. **Make logging easier:** done (November 13): drive timer, night-minute suggestions and the printable practice log.
-3. **Before real families:** privacy notice and in-app deletion done (November 13). Account deletion done (November 13). Routing and tile providers are now configurable (`VITE_ROUTING_URL`, `VITE_MAP_TILE_URL`, `VITE_MAP_TILE_ATTRIBUTION`). Remaining: a real privacy inbox to replace the placeholder, backups (plan and commands in [OPERATIONS.md](OPERATIONS.md)), choosing a routing and tile provider, invitation emails (links work today; sending them for you needs a mail provider), and independent security review ([SECURITY_REVIEW.md](SECURITY_REVIEW.md)).
-4. **Housekeeping:** choose a Railway plan before the trial ends. Optionally delete the retired `users/{uid}/learners` and `users/{uid}/drives` test records in the Firebase console.
+3. **Public route library (next):** managers publish approved routes; signed-in families browse, filter and save them; ends trimmed for privacy; reporting and unpublishing. Decisions are recorded in [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md).
+4. **Before real families:** privacy notice and in-app deletion done (November 13). Account deletion done (November 13). Routing and tile providers are now configurable (`VITE_ROUTING_URL`, `VITE_MAP_TILE_URL`, `VITE_MAP_TILE_ATTRIBUTION`). Remaining: a real privacy inbox to replace the placeholder, backups (plan and commands in [OPERATIONS.md](OPERATIONS.md)), choosing a routing and tile provider, invitation emails (links work today; sending them for you needs a mail provider), and independent security review ([SECURITY_REVIEW.md](SECURITY_REVIEW.md)).
+5. **Housekeeping:** choose a Railway plan before the trial ends. Optionally delete the retired `users/{uid}/learners` and `users/{uid}/drives` test records in the Firebase console.
 
 ## Known limits
 
 - Dashboard totals cover up to 1,000 drives per learner; the logs page loads 50 at a time.
 - Rate limiting is per service instance and in memory.
 - Public OSRM and OpenStreetMap services are for light testing only.
-- Learners cannot yet write notes or submit routes; community routes, voting and moderation are not built.
+- The public route library (phase 2, design in [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md)), voting and reporting are not built yet.
