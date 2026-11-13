@@ -3,6 +3,7 @@ import { createUserWithEmailAndPassword, getIdToken, reload, sendEmailVerificati
 import { auth } from "./firebaseClient";
 import SharedSpaces from "./SharedSpaces";
 import DeleteAccount from "./DeleteAccount";
+import { usePendingInvite } from "./usePendingInvite";
 import { sharedAccessDemo } from "./sharedClient";
 import { heading } from "./design";
 
@@ -18,6 +19,7 @@ export default function FirebaseAccount({ user, loading, view, page, onNavigate,
   const [showPassword, setShowPassword] = useState(false);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
+  const invite = usePendingInvite();
   const onSharedBusyChange = useCallback((value: boolean) => { setSharedBusy(value); onBusyChange?.(value); }, [onBusyChange]);
   useEffect(() => { setEmailVerified(user?.emailVerified ?? false); }, [user]);
   if (!auth) return <section className="rounded-2xl border border-border bg-card p-5">Sign-in is unavailable because Firebase is not configured.</section>;
@@ -67,6 +69,7 @@ export default function FirebaseAccount({ user, loading, view, page, onNavigate,
     <h2 className="text-base font-bold" style={heading}>Account</h2>
     <p className="mt-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><strong>Development preview:</strong> Use fictional names, notes, and locations only. This preview is not ready for real family data.</p>
     {sharedAccessDemo ? <p className="mt-2 rounded-lg bg-[#E4EFF2] p-3 text-sm"><strong>Shared local demo.</strong> Sign in with manager@example.test, supervisor@example.test, or learner@example.test. The password is fictional-drive-123. The demo resets when stopped.</p> : <p className="mt-2 rounded-lg bg-[#E4EFF2] p-3 text-sm"><strong>Shared spaces (development).</strong> Your email must be verified before you can add a learner or accept an invitation.</p>}
+    {!user && !loading && invite && <p role="status" className="mt-2 rounded-lg border border-[#0C7A8D]/30 bg-[#E4EFF2] p-3 text-sm text-[#095969]"><strong>You’ve been invited to a learner’s space.</strong> Sign in, or create an account, with the email address the invitation was sent to. You’ll be able to review it before joining.</p>}
     {!user && !loading && <p className="mt-2 text-sm text-muted-foreground">Sign in to see and record practice for the learners you supervise. See <button type="button" className="text-[#0C7A8D] underline" onClick={() => onNavigate("privacy")}>Privacy</button> for what is stored and who can see it.</p>}
     {loading ? <p className="mt-3 text-sm">Checking account…</p> : user ? <>
       <div className="mt-3 flex flex-wrap items-center gap-3 text-sm"><span>Signed in as {user.email}</span><button disabled={busy || sharedBusy} className="rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-50" onClick={async () => { try { await signOut(activeAuth); setMessage(""); setCreating(false); } catch { setMessage("Could not sign out. Please try again."); } }}>Sign out</button></div>

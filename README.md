@@ -8,7 +8,7 @@ It is a working prototype. Use fictional data only: security and privacy review 
 
 ## What works today
 
-- **Shared learner spaces.** A managing supervisor creates a space for each learner and invites other supervisors and the learner. Invitations are one-time codes that you pass on yourself; nothing is emailed.
+- **Shared learner spaces.** A managing supervisor creates a space for each learner and invites other supervisors and the learner. Invitations are one-time links that you send yourself (**Copy link** or, on a phone, **Share…**); nothing is emailed. Opening the link takes the invitee to a review screen after they sign in, where one tap joins the space.
 - **Dashboard** in the original Figma style: hours toward Georgia's 40 hours (6 at night), recent drives, skill and condition coverage with a suggestion of something new to try, and saved routes.
 - **Routes:** draw a route on a Leaflet/OpenStreetMap map, snap it to roads (OSRM), review it, and save it to the learner's space. Saved routes appear in a list next to a large map.
 - **Driving logs:** log a drive against a saved route, with date, minutes, night minutes, skills, road conditions and shared notes. Managers can correct any entry; supervisors can correct their own.
@@ -79,11 +79,11 @@ Map tiles come from the public OpenStreetMap tile service by default, which sees
 
 | Command | What it covers | Needs |
 | --- | --- | --- |
-| `npm test` | Sun times, drive timer, route-line decoding, map/routing settings, service config and HTTP handler | Node only |
+| `npm test` | Sun times, drive timer, invitation links, route-line decoding, map/routing settings, service config and HTTP handler | Node only |
 | `npm run typecheck` | TypeScript checks for the app (`tsconfig.json`, strict) | Node only |
 | `npm run test:rules` | Firestore security rules | Firebase CLI, Java 21+ |
 | `npm run test:shared` | Shared-space service, local gateway and the deployable server | Firebase CLI, Java 21+ |
-| `npm run test:browser` | The app in Chrome: dashboard, routes, logs, timer, print log, invitations, deletion, route sync | + Chrome |
+| `npm run test:browser` | The app in Chrome: dashboard, routes, logs, timer, print log, invitations and invitation links, deletion, route sync | + Chrome |
 
 Emulator tests use a `demo-` project and synthetic accounts; they never touch a real project. Run `npm run build` to check the production build.
 
@@ -96,6 +96,7 @@ Emulator tests use a `demo-` project and synthetic accounts; they never touch a 
 - `src/app/DeleteAccount.tsx`: deleting your own account from the Account page.
 - `src/app/design.tsx`: the Figma visual building blocks (cards, progress ring and bars, skill chips, route sketch). Reuse these for new screens; see `guidelines/Guidelines.md`.
 - `src/app/SharedDashboard.tsx`, `SharedRoutes.tsx`, `SharedPractice.tsx`, `SharedSpaces.tsx`: dashboard, routes, driving logs, and people & access.
+- `src/app/inviteLink.js`, `usePendingInvite.ts`: building and reading invitation links, and holding an opened invitation for this tab.
 - `src/app/sharedClient.js`: decides demo or hosted mode, reads shared data from Firestore and calls the shared service.
 - `src/app/RouteMap.tsx`, `SharedRouteCard.tsx`, `followRoads.js`, `routePolyline.js`, `mapProviders.js`: Leaflet maps, the routing request, route-line decoding, and which tile and routing providers are used.
 - `src/app/Privacy.tsx`, `contact.js`: the privacy notice and its contact address (a placeholder until a real inbox exists).

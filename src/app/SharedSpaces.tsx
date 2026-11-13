@@ -4,7 +4,9 @@ import SharedPractice from "./SharedPractice";
 import SharedRoutes from "./SharedRoutes";
 import SharedDashboard from "./SharedDashboard";
 import type { TimerDraft } from "./DriveTimer";
-import { dangerButton } from "./design";
+import { dangerButton, ghostButton, primaryButton } from "./design";
+import { inviteLink, parseInvite, savePendingInvite } from "./inviteLink";
+import { usePendingInvite } from "./usePendingInvite";
 
 type Space = { id: string; learnerName: string; role: string };
 type Preview = { learnerName: string; role: string; expiresAt: number };
@@ -27,10 +29,11 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
   const [learnerName, setLearnerName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("supervisor");
-  const [issued, setIssued] = useState<{ spaceId: string; token: string } | null>(null);
-  const [joinSpace, setJoinSpace] = useState("");
-  const [joinToken, setJoinToken] = useState("");
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [issued, setIssued] = useState<{ link: string; email: string; role: string; learnerName: string; expiresAt: number } | null>(null);
+  const [joinLink, setJoinLink] = useState("");
+  const [joinError, setJoinError] = useState("");
+  const invite = usePendingInvite();
+  const [preview, setPreview] = useState<{ key: string; state: "checking" | "ready" | "failed"; details?: Preview } | null>(null);
   const [status, setStatus] = useState("");
   const [uncertain, setUncertain] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -78,6 +81,19 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
     }
   }, [uid, verified, selected]);
   useEffect(() => { void refreshMembers(); }, [refreshMembers]);
+  // Review a held invitation as soon as the account can. Reviewing grants nothing and
+  // changes nothing, so a failure here just explains itself instead of blocking the page.
+  const inviteKey = invite ? `${invite.spaceId}.${invite.token}` : "";
+  useEffect(() => {
+    if (!invite || !verified) { setPreview(null); return; }
+    let current = true;
+    setPreview({ key: inviteKey, state: "checking" });
+    sharedAccessRequest(uid, "previewInvitation", { spaceId: invite.spaceId, token: invite.token })
+      .then((details: Preview) => { if (current && alive.current) setPreview({ key: inviteKey, state: "ready", details }); })
+      .catch(() => { if (current && alive.current) setPreview({ key: inviteKey, state: "failed" }); });
+    return () => { current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inviteKey, verified, uid]);
   const refreshInvitations = useCallback(async () => {
     const request = ++invitationGeneration.current;
     setInvitations([]); setInvitationError(false); setInvitationCursor(null);
@@ -128,17 +144,32 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
     <div hidden={page !== "logs"}><SharedPractice uid={uid} spaces={spaces} blocked={blocked} run={run} createdRoute={createdRoute} logRequest={logRequest} visible={page === "logs"} routesVersion={routesVersion} onCreateRoute={(spaceId) => { onNavigate("routes"); setRouteRequest({ spaceId, nonce: crypto.randomUUID() }); }} /></div>
     <div hidden={page !== "routes"}><SharedRoutes uid={uid} spaces={spaces} blocked={blocked} run={run} createRequest={routeRequest} activePage={page === "routes"} onDeleted={() => setRoutesVersion((value) => value + 1)} onCreated={(spaceId, routeId) => { setRoutesVersion((value) => value + 1); if (routeRequest?.spaceId === spaceId) { setCreatedRoute({ spaceId, routeId, nonce: crypto.randomUUID() }); setRouteRequest(null); onNavigate("logs"); } }} /></div>
     <div hidden={page !== "shared"}>
-    <p className="mt-3 text-sm text-muted-foreground">Use fictional data. Invitations are not emailed: share the invitation code with the person yourself.</p>
+    {invite && <div className="mt-3 rounded-xl border border-[#0C7A8D]/30 bg-[#E4EFF2] p-4 text-sm text-[#095969]" role="region" aria-label="Invitation">
+      {!verified ? <><p><strong>You’ve been invited to a learner’s space.</strong> Verify your email under Account first, then come back here to review the invitation.</p><div className="mt-2 flex flex-wrap gap-2"><button type="button" className={ghostButton} onClick={() => onNavigate("account")}>Go to Account</button><button type="button" className={ghostButton} onClick={() => savePendingInvite(null)}>Dismiss</button></div></>
+      : preview?.key === inviteKey && preview.state === "ready" && preview.details ? <><p><strong>Invitation to {preview.details.learnerName}’s space as {preview.details.role}.</strong> Once you join, you’ll see {preview.details.learnerName}’s routes, drives and shared notes{preview.details.role === "supervisor" ? ", and you can log drives" : ""}. Access begins only after you accept.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" className={primaryButton} disabled={blocked} onClick={() => { const accepted = invite; const name = preview.details?.learnerName ?? ""; void run(async () => { await sharedAccessRequest(uid, "acceptInvitation", { spaceId: accepted.spaceId, token: accepted.token }); savePendingInvite(null); const loaded = await refresh(); setStatus(loaded ? `Invitation accepted. You can now see ${name}’s routes and drives.` : "Invitation accepted, but the list could not refresh."); }); }}>Accept invitation</button><button type="button" className={ghostButton} disabled={busy} onClick={() => savePendingInvite(null)}>Not now</button></div><p className="mt-2 text-xs">“Not now” only closes this; the link keeps working until it expires.</p></>
+      : preview?.key === inviteKey && preview.state === "failed" ? <><p><strong>This invitation can’t be used with this account.</strong> It may have expired (links last 48 hours), been cancelled or already used, or been sent to a different email address. Ask the managing supervisor for a new link.</p><div className="mt-2"><button type="button" className={ghostButton} onClick={() => savePendingInvite(null)}>Dismiss</button></div></>
+      : <p>Checking your invitation…</p>}
+    </div>}
+    <p className="mt-3 text-sm text-muted-foreground">Use fictional data. Invitations aren’t emailed: create a link below and send it to the person yourself.</p>
     {spaces.length > 0 && <ul className="mt-2 space-y-1 text-sm" aria-label="Shared spaces">{spaces.map((space) => <li key={space.id} className="flex flex-wrap items-center gap-2"><span>{space.learnerName} · {space.role}</span>{space.role !== "manager" && <button type="button" className={dangerButton} disabled={blocked} onClick={() => { if (!window.confirm(`Leave ${space.learnerName}’s space? You will lose access to their routes and practice history. The managing supervisor can invite you again.`)) return; void run(async () => { await sharedAccessRequest(uid, "leaveSpace", { spaceId: space.id }); await refresh(); if (alive.current) setStatus(`You left ${space.learnerName}’s space.`); }); }}>Leave space</button>}</li>)}</ul>}
     <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); void run(async () => { await sharedAccessRequest(uid, "createSpace", { learnerName: learnerName.trim() }); setLearnerName(""); const loaded = await refresh(); setStatus(loaded ? "Learner space created." : "Learner space created, but the list could not refresh."); }); }}>
       <label className="text-sm">Learner name for shared space<input className={`${field} mt-1`} value={learnerName} maxLength={60} required disabled={blocked} onChange={(event) => setLearnerName(event.target.value)} /></label><button className={button} disabled={blocked}>Create shared space</button>
     </form>
-    {spaces.some((space) => space.role === "manager") && <form className="mt-4 grid gap-2 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setIssued(null); void run(async () => { const result = await sharedAccessRequest(uid, "createInvitation", { spaceId: selected, recipientEmail: email.trim(), role }); setIssued(result); await refreshInvitations(); setStatus("Invitation created for this emulator test."); }); }}>
+    {spaces.some((space) => space.role === "manager") && <form className="mt-4 grid gap-2 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setIssued(null); void run(async () => { const recipient = email.trim(), learner = spaces.find((space) => space.id === selected)?.learnerName ?? ""; const result = await sharedAccessRequest(uid, "createInvitation", { spaceId: selected, recipientEmail: recipient, role }); setIssued({ link: inviteLink(window.location.href, result.spaceId, result.token), email: recipient, role, learnerName: learner, expiresAt: result.expiresAt }); setEmail(""); await refreshInvitations(); setStatus("Invitation link created."); }); }}>
       <label className="text-sm">Learner space<select className={`${field} mt-1`} value={selected} disabled={blocked} onChange={(event) => { setSelected(event.target.value); setIssued(null); }}>{spaces.filter((space) => space.role === "manager").map((space) => <option value={space.id} key={space.id}>{space.learnerName}</option>)}</select></label>
       <label className="text-sm">Invitee email<input className={`${field} mt-1`} value={email} type="email" required disabled={blocked} onChange={(event) => { setEmail(event.target.value); setIssued(null); }} /></label>
       <label className="text-sm">Invitee role<select className={`${field} mt-1`} value={role} disabled={blocked} onChange={(event) => { setRole(event.target.value); setIssued(null); }}><option value="supervisor">Supervisor</option><option value="learner">Learner</option></select></label>
-      <div className="flex items-end"><button className={button} disabled={blocked || !selected}>Create test invitation</button></div>
+      <div className="flex items-end"><button className={button} disabled={blocked || !selected}>Create invitation link</button></div>
     </form>}
+    {issued && <div className="mt-3 space-y-2 rounded-xl border border-[#0C7A8D]/30 bg-[#E4EFF2] p-4 text-sm text-[#095969]" role="region" aria-label="New invitation link">
+      <p><strong>Send this link to {issued.email}</strong> yourself, by text, chat or email. It joins {issued.learnerName}’s space as a {issued.role}, works once, only for that email address, and expires {new Date(issued.expiresAt).toLocaleString()}. It can’t be shown again.</p>
+      <label className="block font-medium">Link to send<input className={`${field} mt-1 font-mono text-xs`} value={issued.link} readOnly onFocus={(event) => event.target.select()} /></label>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={primaryButton} onClick={async () => { try { await navigator.clipboard.writeText(issued.link); setStatus("Link copied."); } catch { setStatus("Couldn’t copy automatically. Select the link and copy it."); } }}>Copy link</button>
+        {typeof navigator.share === "function" && <button type="button" className={ghostButton} onClick={async () => { try { await navigator.share({ title: "DriveReady invitation", text: `Join ${issued.learnerName}’s learner space on DriveReady as a ${issued.role}. Sign in or create an account with ${issued.email}. The link works once and expires in 48 hours.`, url: issued.link }); } catch { /* closed or unavailable */ } }}>Share…</button>}
+        <button type="button" className={ghostButton} onClick={() => setIssued(null)}>Done</button>
+      </div>
+    </div>}
     {selected && <div className="mt-4 rounded-lg bg-card p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold">People with access</h4><button type="button" className={button} disabled={busy || disabled || !verified} onClick={() => void refreshMembers()}>Refresh people</button></div>
       <p className="mt-1 text-muted-foreground">Emails shown are from when each person joined and may have changed.</p>
@@ -148,7 +179,7 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
     </div>}
     {selected && <div className="mt-4 rounded-lg bg-card p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold">Pending invitations</h4><button type="button" className={button} disabled={busy || disabled || !verified} onClick={() => void refreshInvitations()}>Refresh invitations</button></div>
-      <p className="mt-1 text-muted-foreground">These invitations have not expired or been cancelled. An invitation may still be ineligible for acceptance. Test codes cannot be recovered here. Refresh to see recent changes.</p>
+      <p className="mt-1 text-muted-foreground">These invitations have not expired or been cancelled. An invitation may still be ineligible for acceptance. Links can’t be shown again; cancel a lost one and create a new one. Refresh to see recent changes.</p>
       {invitationError && <p role="status">Could not load invitations. Refresh or try loading more again.</p>}
       <ul aria-label="Pending invitations" className="mt-2 space-y-2">{invitations.map((item) => <li key={item.id} className="flex flex-wrap items-center gap-2"><span>{item.recipientEmail} · {item.role} · expires {new Date(item.expiresAt).toLocaleString()}</span><button type="button" className={button} disabled={blocked} onClick={() => setCancelling(item)}>Cancel invitation for {item.recipientEmail}</button></li>)}</ul>
       {invitationCursor && <button type="button" className={`${button} mt-2`} disabled={busy || disabled || !verified || invitationsLoading} onClick={() => void loadMoreInvitations()}>{invitationsLoading ? "Loading invitations…" : "Load more invitations"}</button>}
@@ -167,13 +198,11 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
         </form>
       </div>;
     })()}
-    {issued && <div className="mt-3 space-y-2 rounded-lg bg-card p-3 text-sm"><p>Share these test values privately. This code grants an invitation to the intended verified account; no message was sent.</p><label className="block">Invitation space ID<input className={`${field} mt-1`} value={issued.spaceId} readOnly /></label><label className="block">Invitation code to share<input className={`${field} mt-1`} value={issued.token} readOnly /></label></div>}
-    <form className="mt-4 grid gap-2 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setPreview(null); void run(async () => { const result = await sharedAccessRequest(uid, "previewInvitation", { spaceId: joinSpace.trim(), token: joinToken.trim() }); setPreview(result); setStatus(""); }); }}>
-      <label className="text-sm">Received space ID<input className={`${field} mt-1`} value={joinSpace} autoComplete="off" required disabled={blocked} onChange={(event) => { setJoinSpace(event.target.value); setPreview(null); }} /></label>
-      <label className="text-sm">Received invitation code<input className={`${field} mt-1`} type="password" value={joinToken} autoComplete="off" required disabled={blocked} onChange={(event) => { setJoinToken(event.target.value); setPreview(null); }} /></label>
-      <div><button className={button} disabled={blocked}>Review invitation</button></div>
+    <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); const found = parseInvite(joinLink); if (!found) { setJoinError("That doesn’t look like a DriveReady invitation link. Paste the whole link you were sent."); return; } setJoinError(""); setJoinLink(""); setStatus(""); savePendingInvite(found); }}>
+      <label className="min-w-0 basis-full text-sm sm:basis-0 sm:flex-1">Invitation link you received<input className={`${field} mt-1`} value={joinLink} autoComplete="off" required disabled={blocked} onChange={(event) => { setJoinLink(event.target.value); setJoinError(""); }} placeholder="https://…#invite=…" /></label>
+      <button className={button} disabled={blocked}>Review invitation</button>
     </form>
-    {preview && <div className="mt-3 rounded-lg bg-card p-3 text-sm"><p>Invitation to {preview.learnerName}’s space as {preview.role}. Access begins only after acceptance.</p><div className="mt-2 flex gap-2"><button type="button" className={button} disabled={blocked} onClick={() => void run(async () => { await sharedAccessRequest(uid, "acceptInvitation", { spaceId: joinSpace.trim(), token: joinToken.trim() }); setPreview(null); setJoinToken(""); setJoinSpace(""); const loaded = await refresh(); setStatus(loaded ? "Invitation accepted." : "Invitation accepted, but the list could not refresh."); })}>Accept invitation</button><button type="button" className={button} disabled={busy} onClick={() => setPreview(null)}>Cancel</button></div></div>}
+    {joinError && <p role="status" className="mt-2 text-sm text-red-800">{joinError}</p>}
     </div>
   </section>;
 }

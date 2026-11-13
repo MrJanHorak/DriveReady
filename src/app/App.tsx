@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ClipboardList, FileText, LayoutDashboard, Map, Navigation, Shield, UserCircle2, Users } from "lucide-react";
 import Workspace from "./Workspace";
 import StateRequirements from "./StateRequirements";
 import Privacy from "./Privacy";
 import { sharedAccessEnabled } from "./sharedClient";
+import { loadPendingInvite, takeInviteFromLocation } from "./inviteLink";
 import { heading, mono } from "./design";
 
 const navItems = [
@@ -17,8 +18,14 @@ const navItems = [
 ];
 
 export default function App() {
-  const [activeNav, setActiveNav] = useState("dashboard");
+  // Someone opening an invitation link lands on People & access to review it.
+  const [activeNav, setActiveNav] = useState(() => loadPendingInvite() ? "shared" : "dashboard");
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const opened = () => { if (takeInviteFromLocation()) setActiveNav("shared"); };
+    window.addEventListener("hashchange", opened);
+    return () => window.removeEventListener("hashchange", opened);
+  }, []);
   // Without a shared service only the state requirements and account pages are useful.
   const nav = sharedAccessEnabled ? navItems : navItems.filter((item) => ["requirements", "account", "privacy"].includes(item.id));
   const page = nav.some((item) => item.id === activeNav) ? activeNav : "account";

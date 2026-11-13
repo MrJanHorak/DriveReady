@@ -39,21 +39,34 @@ test("manager, invited supervisor and learner can join only the intended space",
     const managerList = manager.getByRole("list", { name: "Shared spaces" });
     await expect(managerList.getByRole("listitem")).toHaveCount(3);
     await manager.getByRole("combobox", { name: "Learner space" }).selectOption({ label: "First learner" });
+    async function review(page, link) {
+      await page.getByLabel("Invitation link you received").fill(link);
+      await page.getByRole("button", { name: "Review invitation" }).click();
+    }
+    async function expectRefused(page) {
+      const card = page.getByRole("region", { name: "Invitation" });
+      await expect(card).toContainText("This invitation can’t be used with this account.");
+      await expect(card.getByRole("button", { name: "Accept invitation" })).toHaveCount(0);
+      await card.getByRole("button", { name: "Dismiss" }).click();
+      await expect(card).toHaveCount(0);
+    }
     async function makeInvite(email, role) {
       await manager.getByLabel("Invitee email").fill(email);
       await manager.getByRole("combobox", { name: "Invitee role" }).selectOption(role);
-      await manager.getByRole("button", { name: "Create test invitation" }).click();
-      await expect(manager.getByText("Invitation created for this emulator test.")).toBeVisible();
-      return { spaceId: await manager.getByLabel("Invitation space ID").inputValue(), token: await manager.getByLabel("Invitation code to share").inputValue() };
+      await manager.getByRole("button", { name: "Create invitation link" }).click();
+      await expect(manager.getByText("Invitation link created.")).toBeVisible();
+      const link = await manager.getByLabel("Link to send").inputValue();
+      expect(link).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/#invite=[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/);
+      return link;
     }
     const supervisorInvite = await makeInvite(emails[1], "supervisor");
     const learnerInvite = await makeInvite(emails[2], "learner");
     const outsider = await login(emails[3]);
-    await outsider.getByLabel("Received space ID").fill(supervisorInvite.spaceId);
-    await outsider.getByLabel("Received invitation code").fill(supervisorInvite.token);
+    await outsider.getByLabel("Invitation link you received").fill("https://example.test/not-an-invite");
     await outsider.getByRole("button", { name: "Review invitation" }).click();
-    await expect(outsider.getByText("Could not confirm the request.", { exact: false })).toBeVisible();
-    await expect(outsider.getByRole("button", { name: "Accept invitation" })).toHaveCount(0);
+    await expect(outsider.getByText("That doesn’t look like a DriveReady invitation link.", { exact: false })).toBeVisible();
+    await review(outsider, supervisorInvite);
+    await expectRefused(outsider);
     const cancelledInvite = await makeInvite(emails[3], "supervisor");
     await expect(manager.getByRole("list", { name: "Pending invitations" })).toContainText(emails[3]);
     await manager.getByRole("button", { name: `Cancel invitation for ${emails[3]}` }).click();
@@ -62,18 +75,13 @@ test("manager, invited supervisor and learner can join only the intended space",
     await manager.getByRole("button", { name: "Confirm cancellation" }).click();
     await expect(manager.getByText("Invitation cancelled.")).toBeVisible();
     await expect(manager.getByRole("list", { name: "Pending invitations" })).not.toContainText(emails[3]);
-    await outsider.getByRole("button", { name: "Refresh spaces" }).click();
-    await outsider.getByLabel("Received space ID").fill(cancelledInvite.spaceId);
-    await outsider.getByLabel("Received invitation code").fill(cancelledInvite.token);
-    await outsider.getByRole("button", { name: "Review invitation" }).click();
-    await expect(outsider.getByText("Could not confirm the request.", { exact: false })).toBeVisible();
+    await review(outsider, cancelledInvite);
+    await expectRefused(outsider);
     let supervisor;
     for (const [email, invite, role] of [[emails[1], supervisorInvite, "supervisor"], [emails[2], learnerInvite, "learner"]]) {
       const page = await login(email);
       if (role === "supervisor") supervisor = page;
-      await page.getByLabel("Received space ID").fill(invite.spaceId);
-      await page.getByLabel("Received invitation code").fill(invite.token);
-      await page.getByRole("button", { name: "Review invitation" }).click();
+      await review(page, invite);
       await expect(page.getByText(`Invitation to First learner’s space as ${role}.`, { exact: false })).toBeVisible();
       await expect(page.getByText("0 spaces", { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Accept invitation" }).click();
@@ -100,15 +108,11 @@ test("manager, invited supervisor and learner can join only the intended space",
     await expect(manager.getByText("Access removed. All pending invitations for this space were invalidated.")).toBeVisible();
     await expect(people).not.toContainText(emails[1]);
     await expect(people).toContainText(emails[2]);
-    await expect(manager.getByLabel("Invitation code to share")).toHaveCount(0);
+    await expect(manager.getByLabel("Link to send")).toHaveCount(0);
     await supervisor.getByRole("button", { name: "Refresh spaces" }).click();
     await expect(supervisor.getByText("0 spaces", { exact: true })).toBeVisible();
-    await outsider.getByRole("button", { name: "Refresh spaces" }).click();
-    await outsider.getByLabel("Received space ID").fill(pending.spaceId);
-    await outsider.getByLabel("Received invitation code").fill(pending.token);
-    await outsider.getByRole("button", { name: "Review invitation" }).click();
-    await expect(outsider.getByText("Could not confirm the request.", { exact: false })).toBeVisible();
-    await expect(outsider.getByRole("button", { name: "Accept invitation" })).toHaveCount(0);
+    await review(outsider, pending);
+    await expectRefused(outsider);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
     await deleteApp(adminApp);
