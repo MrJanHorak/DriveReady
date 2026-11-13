@@ -12,6 +12,7 @@ It is a working prototype. Use fictional data only: security and privacy review 
 - **Dashboard** in the original Figma style: hours toward Georgia's 40 hours (6 at night), recent drives, skill and condition coverage with a suggestion of something new to try, and saved routes.
 - **Routes:** draw a route on a Leaflet/OpenStreetMap map, snap it to roads (OSRM), review it, and save it to the learner's space. Saved routes appear in a list next to a large map.
 - **Driving logs:** log a drive against a saved route, with date, minutes, night minutes, skills, road conditions and shared notes. Managers can correct any entry; supervisors can correct their own.
+- **Drive timer:** the passenger starts it as the drive begins, pauses it for stops, and taps **Stop & log** to open the drive form with the date and minutes filled in. It survives reloads and a locked phone (kept in that browser), keeps the screen awake where supported, and clears once the drive is saved.
 - **State requirements:** a sourced Georgia DDS overview with links. Other states are not covered yet.
 
 Shared spaces run in two ways: in the **local demo** (`npm run demo:shared`) with no setup beyond the emulators, or with **plain `npm run dev`** once the shared service is hosted (see [DEPLOYMENT.md](DEPLOYMENT.md)). Without either, the app shows a short setup notice and the State Requirements page.

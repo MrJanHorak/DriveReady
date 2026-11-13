@@ -3,6 +3,7 @@ import { readSharedMembers, readSharedSpaces, sharedAccessRequest, sharedAccessD
 import SharedPractice from "./SharedPractice";
 import SharedRoutes from "./SharedRoutes";
 import SharedDashboard from "./SharedDashboard";
+import type { TimerDraft } from "./DriveTimer";
 
 type Space = { id: string; learnerName: string; role: string };
 type Preview = { learnerName: string; role: string; expiresAt: number };
@@ -34,7 +35,7 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
   const [busy, setBusy] = useState(false);
   const [routeRequest, setRouteRequest] = useState<{ spaceId: string; nonce: string } | null>(null);
   const [createdRoute, setCreatedRoute] = useState<{ spaceId: string; routeId: string; nonce: string } | null>(null);
-  const [logRequest, setLogRequest] = useState<{ spaceId: string; nonce: string } | null>(null);
+  const [logRequest, setLogRequest] = useState<{ spaceId: string; nonce: string; draft?: TimerDraft } | null>(null);
   // Bumped whenever a route is saved, so the drive form picks it up without a manual refresh.
   const [routesVersion, setRoutesVersion] = useState(0);
   const [dashboardSpace, setDashboardSpace] = useState("");
@@ -121,7 +122,7 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
     {status && <p role="status" className="mt-2 text-sm">{status}</p>}
     <div className={bare ? "mb-3 flex items-center justify-end gap-2 text-xs" : "mt-3 flex items-center gap-2"} hidden={onDashboard && spaces.length > 0}><button type="button" disabled={busy || disabled || !verified} className={button} onClick={() => { setStatus(""); void refresh(); void refreshMembers(); void refreshInvitations(); }}>Refresh spaces</button><span className="text-sm">{spaces.length} {spaces.length === 1 ? "space" : "spaces"}</span></div>
     {spaces.length === 0 && page !== "shared" && <p className="mt-3 text-sm">Add a learner in <button type="button" className="text-[#0C7A8D] underline" onClick={() => onNavigate("shared")}>People &amp; access</button> to get started.</p>}
-    {onDashboard && <SharedDashboard uid={uid} spaces={spaces} blocked={blocked} onNavigate={onNavigate} preferredSpace={dashboardSpace} onSelect={setDashboardSpace} onLogDrive={(spaceId) => { setLogRequest({ spaceId, nonce: crypto.randomUUID() }); onNavigate("logs"); }} />}
+    {onDashboard && <SharedDashboard uid={uid} spaces={spaces} blocked={blocked} onNavigate={onNavigate} preferredSpace={dashboardSpace} onSelect={setDashboardSpace} onLogDrive={(spaceId, draft) => { setLogRequest({ spaceId, nonce: crypto.randomUUID(), draft }); onNavigate("logs"); }} />}
     <div hidden={page !== "logs"}><SharedPractice uid={uid} spaces={spaces} blocked={blocked} run={run} createdRoute={createdRoute} logRequest={logRequest} visible={page === "logs"} routesVersion={routesVersion} onCreateRoute={(spaceId) => { onNavigate("routes"); setRouteRequest({ spaceId, nonce: crypto.randomUUID() }); }} /></div>
     <div hidden={page !== "routes"}><SharedRoutes uid={uid} spaces={spaces} blocked={blocked} run={run} createRequest={routeRequest} activePage={page === "routes"} onCreated={(spaceId, routeId) => { setRoutesVersion((value) => value + 1); if (routeRequest?.spaceId === spaceId) { setCreatedRoute({ spaceId, routeId, nonce: crypto.randomUUID() }); setRouteRequest(null); onNavigate("logs"); } }} /></div>
     <div hidden={page !== "shared"}>

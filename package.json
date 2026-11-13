@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --test src/app/routePolyline.test.js server/config.test.mjs server/sharedGateway.test.mjs",
+    "test": "node --test src/app/timerState.test.js src/app/routePolyline.test.js server/config.test.mjs server/sharedGateway.test.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-driveready \"node --test tests/rules/firestore.rules.test.js\"",
     "test:shared": "firebase emulators:exec --only auth,firestore --project demo-driveready \"node --test server/sharedAccess.test.mjs server/localSharedGateway.test.mjs server/main.test.mjs\"",
     "test:browser": "firebase emulators:exec --only auth,firestore --project demo-driveready \"playwright test\"",

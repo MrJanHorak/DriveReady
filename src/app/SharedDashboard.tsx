@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Clock, Map, Plus, Route as RouteIcon, AlertCircle, CheckCircle2 } from "lucide-react";
 import { readSharedDrives, readSharedRoutes } from "./sharedClient";
+import DriveTimer, { type TimerDraft } from "./DriveTimer";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
 import type { RoutePoint } from "./RouteMap";
 import { Badge, Card, CardHeader, ProgressBar, ProgressRing, RouteSketch, SkillTag, ghostButton, heading, mono, primaryButton } from "./design";
@@ -26,7 +27,7 @@ export function formatDuration(minutes: number) {
 const hours = (minutes: number) => Math.round((minutes / 60) * 10) / 10;
 
 // Mounted only while the dashboard is visible, so each visit shows fresh totals.
-export default function SharedDashboard({ uid, spaces, blocked, onNavigate, onLogDrive, preferredSpace, onSelect }: { uid: string; spaces: Space[]; blocked: boolean; onNavigate: (page: string) => void; onLogDrive: (spaceId: string) => void; preferredSpace: string; onSelect: (spaceId: string) => void }) {
+export default function SharedDashboard({ uid, spaces, blocked, onNavigate, onLogDrive, preferredSpace, onSelect }: { uid: string; spaces: Space[]; blocked: boolean; onNavigate: (page: string) => void; onLogDrive: (spaceId: string, draft?: TimerDraft) => void; preferredSpace: string; onSelect: (spaceId: string) => void }) {
   const [selected, setSelectedState] = useState(preferredSpace);
   const setSelected = useCallback((next: string | ((current: string) => string)) => setSelectedState((current) => { const value = typeof next === "function" ? next(current) : next; if (value !== current) onSelect(value); return value; }), [onSelect]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -106,6 +107,7 @@ export default function SharedDashboard({ uid, spaces, blocked, onNavigate, onLo
       {canRecord && <button type="button" className={primaryButton} disabled={blocked} onClick={() => onLogDrive(selected)}><Plus size={15} aria-hidden="true" /> Log a drive</button>}
     </div>
 
+    <DriveTimer uid={uid} spaces={spaces} spaceId={selected} blocked={blocked} onLog={onLogDrive} />
     {state === "error" && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Could not load this learner’s practice. Check access and <button type="button" className="underline" onClick={() => void load()}>try again</button>.</p>}
     {partial && <p role="status" className="rounded-xl bg-[#E4EFF2] p-3 text-sm text-[#095969]">Showing the latest {drives.length} drives. Older drives are not included in these totals.</p>}
 

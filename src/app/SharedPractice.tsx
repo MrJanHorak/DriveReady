@@ -6,6 +6,8 @@ import type { RoutePoint } from "./RouteMap";
 import { PracticeChoices } from "./PracticeChoices";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
 import { SkillTag, heading, primaryButton } from "./design";
+import DriveTimer, { type TimerDraft } from "./DriveTimer";
+import { loadTimer, saveTimer } from "./timerState";
 
 type Space = { id: string; learnerName: string; role: string };
 type Route = { id: string; name: string; start: string; destination: string; geometry?: RoutePoint[] };
@@ -16,7 +18,7 @@ type Pending = { action: "createDrive"; body: CreateBody } | { action: "editDriv
 const field = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm";
 const button = "rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50";
 
-export default function SharedPractice({ uid, spaces, blocked, run, createdRoute, logRequest, visible = true, routesVersion = 0, onCreateRoute }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void>; createdRoute: { spaceId: string; routeId: string; nonce: string } | null; logRequest?: { spaceId: string; nonce: string } | null; visible?: boolean; routesVersion?: number; onCreateRoute: (spaceId: string) => void }) {
+export default function SharedPractice({ uid, spaces, blocked, run, createdRoute, logRequest, visible = true, routesVersion = 0, onCreateRoute }: { uid: string; spaces: Space[]; blocked: boolean; run: (action: () => Promise<void>) => Promise<void>; createdRoute: { spaceId: string; routeId: string; nonce: string } | null; logRequest?: { spaceId: string; nonce: string; draft?: TimerDraft } | null; visible?: boolean; routesVersion?: number; onCreateRoute: (spaceId: string) => void }) {
   const [selected, setSelected] = useState("");
   const [drives, setDrives] = useState<Drive[]>([]);
   const [cursor, setCursor] = useState<DocumentSnapshot | null>(null);
@@ -31,6 +33,8 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
   const [skills, setSkills] = useState<string[]>([]);
   const [conditions, setConditions] = useState<string[]>([]);
   const handledLog = useRef("");
+  // Start time of the timed drive the form was filled from; that timer is cleared once the drive is saved.
+  const timerSource = useRef<number | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [scrollToForm, setScrollToForm] = useState(false);
   const [editing, setEditing] = useState<Drive | null>(null);
@@ -129,16 +133,28 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
     }).catch(() => { if (!cancelled && active.current && request === routeGeneration.current) setRouteError(true); });
     return () => { cancelled = true; };
   }, [createdRoute, uid, selected, editing]);
-  // "Log a drive" on the dashboard opens the form here for the chosen learner.
+  // "Log a drive" (or a timed drive) opens the form here for the chosen learner.
+  function openLogForm(request: { spaceId: string; draft?: TimerDraft }) {
+    if (pendingRef.current || editing) return;
+    const dirty = !!(date || minutes || notes || routeId || skills.length || conditions.length);
+    const switching = request.spaceId !== selected && spaces.some((item) => item.id === request.spaceId);
+    if (switching) {
+      if (dirty && !window.confirm("Move to the timed drive’s learner? The unsaved practice form will be cleared.")) return;
+      generation.current += 1; routeGeneration.current += 1;
+      setDrives([]); setCursor(null); setHistoryLoaded(false); setRoutes([]); setRouteCursor(null); resetForm(); setRouteNotice(""); setSelected(request.spaceId); setMessage("");
+    }
+    if (request.draft) {
+      if (!switching && dirty && !window.confirm("Fill the practice form with the timed drive? Your unsaved date and minutes will be replaced.")) { setFormOpen(true); return; }
+      setDate(request.draft.date); setMinutes(String(request.draft.minutes)); setNightMinutes("0");
+      timerSource.current = request.draft.startedAt;
+      setMessage(`Filled in from the drive timer: ${request.draft.minutes} min${request.draft.capped ? " (the most a single drive can record)" : ""}. Add night minutes, the route and skills, then save.`);
+    }
+    setFormOpen(true); setScrollToForm(true);
+  }
   useEffect(() => {
     if (!logRequest || logRequest.nonce === handledLog.current || pendingRef.current || editing) return;
     handledLog.current = logRequest.nonce;
-    const dirty = !!(date || minutes || notes || routeId || skills.length || conditions.length);
-    if (logRequest.spaceId !== selected && !dirty && spaces.some((item) => item.id === logRequest.spaceId)) {
-      generation.current += 1; routeGeneration.current += 1;
-      setDrives([]); setCursor(null); setHistoryLoaded(false); setRoutes([]); setRouteCursor(null); resetForm(); setRouteNotice(""); setSelected(logRequest.spaceId); setMessage("");
-    }
-    setFormOpen(true); setScrollToForm(true);
+    openLogForm(logRequest);
   }, [logRequest]); // eslint-disable-line react-hooks/exhaustive-deps
   async function loadMoreRoutes() {
     if (!routeCursor || !selected || blocked || pending || loadingRoutesRef.current) return;
@@ -175,7 +191,7 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
   const space = spaces.find((item) => item.id === selected);
   const canRecord = space && ["manager", "supervisor"].includes(space.role);
   const chosenRoute = routes.find((route) => route.id === routeId);
-  function resetForm() { setEditing(null); setFormOpen(false); setDate(""); setMinutes(""); setNightMinutes("0"); setNotes(""); setRouteId(""); setSkills([]); setConditions([]); }
+  function resetForm() { timerSource.current = null; setEditing(null); setFormOpen(false); setDate(""); setMinutes(""); setNightMinutes("0"); setNotes(""); setRouteId(""); setSkills([]); setConditions([]); }
   function startEdit(drive: Drive) {
     if (blocked || pending || !canRecord) return;
     if ((date || minutes || notes || routeId || skills.length || conditions.length) && !window.confirm("Replace the current unsaved practice form?")) return;
@@ -188,16 +204,18 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
     pendingRef.current = draft; setPending(draft); setMessage(""); setDiscarding(false);
     void run(async () => {
       await sharedAccessRequest(uid, draft.action, draft.body);
+      if (draft.action === "createDrive" && timerSource.current !== null && loadTimer(uid)?.startedAt === timerSource.current) saveTimer(uid, null);
       pendingRef.current = null; setPending(null); resetForm();
       await refreshHistory();
       if (active.current) setMessage(draft.action === "editDrive" ? "Practice changes saved." : "Practice drive saved.");
     });
   }
   if (!spaces.length && !pending) return null;
-  return <section className="mt-4 rounded-lg bg-card p-3 text-sm">
+  return <section className="mt-4 rounded-lg bg-card p-3 text-sm" aria-label="Practice log">
     <h4 className="text-base font-bold" style={heading}>{sharedAccessDemo ? "Shared practice · local emulator" : "Shared practice"}</h4>
     <p className="mt-1 text-muted-foreground">Practice notes are visible to everyone in this learner’s space.</p>
     <label className="mt-3 block">Practice learner<select className={`${field} mt-1`} value={selected} disabled={blocked || !!pending} onChange={(event) => { if (event.target.value === selected) return; if ((date || minutes || notes || routeId || skills.length || conditions.length) && !window.confirm("Discard the current unsaved practice form and switch learners?")) return; generation.current += 1; routeGeneration.current += 1; setDrives([]); setCursor(null); setHistoryLoaded(false); setRoutes([]); setRouteCursor(null); resetForm(); setRouteNotice(""); setSelected(event.target.value); setMessage(""); }}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.learnerName} · {item.role}</option>)}</select></label>
+    <div className="mt-3"><DriveTimer uid={uid} spaces={spaces} spaceId={selected} blocked={blocked || !!pending} onLog={(spaceId, draft) => openLogForm({ spaceId, draft })} /></div>
     <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><h5 className="font-semibold">Practice history</h5><div className="flex gap-2"><button type="button" className={button} disabled={blocked || !selected} onClick={() => void refreshHistory()}>Refresh practice history</button>{canRecord && !formOpen && <button type="button" className={primaryButton} disabled={blocked} onClick={() => setFormOpen(true)}>Log a drive</button>}</div></div>
     {canRecord && formOpen && <form ref={formRef} className="mt-4 grid gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:grid-cols-2" onSubmit={submit}>
       {editing ? <p className="font-semibold sm:col-span-2">Editing practice from {editing.date}. The recorded route and reported supervisor stay the same.</p> : <p className="sm:col-span-2">For this test, you are recorded as the supervisor reported present. This is not independently verified.</p>}
