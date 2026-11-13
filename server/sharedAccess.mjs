@@ -6,6 +6,7 @@ import { decodeRoutePolyline } from "../src/app/routePolyline.js";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "../src/app/practiceData.js";
 
 const INVITATION_LIFETIME_MS = 48 * 60 * 60 * 1000;
+const RECENT_SIGN_IN_MS = 10 * 60 * 1000;
 const idPattern = /^[A-Za-z0-9_-]{1,128}$/;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const invitationIdPattern = /^[a-f0-9]{64}$/;
@@ -63,7 +64,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       const account = await auth.getUser(uid);
       const email = emailKey(claims.email);
       if (claims.email_verified !== true || account.disabled || !account.emailVerified || !email || emailKey(account.email) !== email) throw unauthorized();
-      return { uid, email };
+      return { uid, email, authTime: Number.isSafeInteger(claims.auth_time) ? claims.auth_time : 0 };
     } catch { throw unauthorized(); }
   }
   const refs = (spaceId, uid) => {
@@ -200,7 +201,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       // Invalidate all pending invitations in this space. An account can change
       // its email, so filtering only by the old invite address is unsafe.
       tx.update(space, { invitationVersion: invitationVersion(spaceSnap.data()) + 1 });
-      tx.update(target, { active: false, removedAt: FieldValue.serverTimestamp() });
+      tx.update(target, { active: false, removedAt: FieldValue.serverTimestamp(), emailAtJoining: FieldValue.delete() });
       tx.delete(link);
     });
   }
@@ -333,7 +334,7 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       const [spaceSnap, memberSnap] = await tx.getAll(space, member);
       if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !memberSnap.exists || memberSnap.data().active !== true || !["supervisor", "learner"].includes(memberSnap.data().role)) throw unauthorized();
       tx.update(space, { invitationVersion: invitationVersion(spaceSnap.data()) + 1 });
-      tx.update(member, { active: false, leftAt: FieldValue.serverTimestamp() });
+      tx.update(member, { active: false, leftAt: FieldValue.serverTimestamp(), emailAtJoining: FieldValue.delete() });
       tx.delete(link);
     });
     return { left: true };
@@ -367,5 +368,44 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     await db.recursiveDelete(space);
     return { deleted: true };
   }
-  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive, deleteDrive, deleteRoute, leaveSpace, deleteSpace };
+  // Deletes the caller's own sign-in account. It needs a sign-in within the last
+  // ten minutes and the account's email typed as confirmation, and it refuses while
+  // the caller still manages a learner space (those are deleted first, on purpose).
+  // Other memberships end as if the person had left; their drives and routes stay
+  // with the learner's history without their email. Existing sessions are revoked
+  // first, so a failed run is finished by signing in again and repeating it.
+  async function deleteAccount({ idToken, confirmEmail }) {
+    const caller = await identity(idToken);
+    if (emailKey(confirmEmail) !== caller.email) throw new Error("Type your account email exactly to confirm.");
+    if (!caller.authTime || now() - caller.authTime * 1000 > RECENT_SIGN_IN_MS) throw new Error("Sign in again to confirm.");
+    const user = db.collection("users").doc(caller.uid);
+    const managedSpace = async () => {
+      const links = await user.collection("spaceLinks").get();
+      for (const link of links.docs) {
+        const space = await db.collection("spaces").doc(link.id).get();
+        if (space.exists && space.data().managerUid === caller.uid) return true;
+      }
+      return false;
+    };
+    if (await managedSpace()) throw new Error("Delete the learner spaces you manage first.");
+    await auth.revokeRefreshTokens(caller.uid);
+    // A space created from another tab just before the revocation is caught here.
+    if (await managedSpace()) throw new Error("Delete the learner spaces you manage first.");
+    const links = await user.collection("spaceLinks").get();
+    for (const link of links.docs) {
+      const { space, member } = refs(link.id, caller.uid);
+      await db.runTransaction(async (tx) => {
+        const [spaceSnap, memberSnap] = await tx.getAll(space, member);
+        if (spaceSnap.exists && spaceSnap.data().status === "active" && memberSnap.exists && memberSnap.data().active === true) {
+          tx.update(space, { invitationVersion: invitationVersion(spaceSnap.data()) + 1 });
+          tx.update(member, { active: false, leftAt: FieldValue.serverTimestamp(), emailAtJoining: FieldValue.delete() });
+        } else if (memberSnap.exists) tx.update(member, { emailAtJoining: FieldValue.delete() });
+        tx.delete(link.ref);
+      });
+    }
+    await db.recursiveDelete(user);
+    try { await auth.deleteUser(caller.uid); } catch (error) { if (error?.code !== "auth/user-not-found") throw error; }
+    return { deleted: true };
+  }
+  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive, deleteDrive, deleteRoute, leaveSpace, deleteSpace, deleteAccount };
 }

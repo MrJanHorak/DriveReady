@@ -34,7 +34,7 @@ These are implementation defaults derived from the requirements. The detailed wr
 | Delete a route | Yes | Routes they created | No |
 | Leave the space | No (delete the space instead) | Yes | Yes |
 | Delete the whole space (drives, routes, members, invitations) | Yes, after typing the learner's name | No | No |
-| Delete a sign-in account | Not in the app yet; on request to the project maintainer | No | No |
+| Delete their own sign-in account | Yes, after deleting the spaces they manage | Yes | Yes |
 
 Drive notes are shared with all active space members in this model; there is no private-note feature. A user interface must state that before a supervisor enters notes. Whether an invited supervisor may edit any member's drive, and whether learners may help create routes, remain product decisions. If a drive is edited by another authorized person, preserve both who recorded it and who last edited it; identify the person reported present separately.
 
@@ -69,6 +69,8 @@ Do not use an email address typed into the UI alone as proof that the intended p
 ### Implementation status
 
 **November 13, 2026 update.** Deletion is implemented in the service (`deleteDrive`, `deleteRoute`, `leaveSpace`, `deleteSpace`) with the permissions in the table above. Deleting a drive requires its current revision, so a drive changed on another device is not removed unseen. Deleting a route leaves logged drives' route snapshots in place. Leaving works like removal: access ends, the discovery link is deleted, and pending invitations for the space are invalidated. Deleting a space first marks it `deleting`, which blocks every other change because all writes require an active space; it then deletes every member's discovery link and the space with all subcollections. A failed deletion can be repeated by the manager to finish. Firestore rules still deny all client deletes.
+
+**Account deletion (November 13, 2026).** `deleteAccount` deletes the caller's own sign-in. It requires the account email typed as confirmation and a sign-in within the last ten minutes (the app asks for the password again), and it refuses while the caller manages any space, including one being deleted, so no learner is left without a manager. It first revokes the account's sessions, so other tabs and devices stop working, then checks again for managed spaces, ends each remaining membership as leaving does, deletes everything under `users/{uid}` (discovery links and any retired single-supervisor records), and finally deletes the Firebase Auth user. If it fails partway, signing in again and repeating it finishes the job. Drives and routes the person recorded stay in the learner's history; their uid remains as attribution but their email does not. Leaving, removal and account deletion now all remove `emailAtJoining` from the membership; memberships ended before this change keep it until the space is deleted. Accounts that never verified their email cannot join a space, so the app deletes those directly through Firebase Authentication.
 
 **November 12, 2026 update.**
 - The single-supervisor workspace (`users/{uid}/learners`, `users/{uid}/drives`) and its backup and import were removed. The rules now deny those paths.

@@ -431,3 +431,55 @@ test("an interrupted space deletion blocks other changes and can be finished by 
   assert.deepEqual(await service.deleteSpace({ idToken: manager.token, spaceId, confirmName: "" }), { deleted: true }, "resuming needs no second confirmation");
   assert.equal((await db.doc(`spaces/${spaceId}`).get()).exists, false);
 });
+
+test("people can delete their own account after confirming; managers delete their spaces first", async () => {
+  const { manager, supervisor, learner, outsider, spaceId, drive } = await deletionFixture("account");
+  currentTime = Date.now();
+  const driveId = await drive(supervisor);
+  await db.doc(`users/${supervisor.uid}/learners/retired`).set({ name: "Old record" });
+  await assert.rejects(service.deleteAccount({ idToken: supervisor.token, confirmEmail: outsider.email }), /exactly/);
+  await assert.rejects(service.deleteAccount({ idToken: supervisor.token }), /exactly/);
+  await assert.rejects(service.deleteAccount({ idToken: manager.token, confirmEmail: manager.email }), /manage first/);
+  currentTime = Date.now() + 11 * 60 * 1000;
+  await assert.rejects(service.deleteAccount({ idToken: learner.token, confirmEmail: learner.email }), /Sign in again/);
+  currentTime = Date.now();
+  const before = (await db.doc(`spaces/${spaceId}`).get()).data().invitationVersion;
+  assert.deepEqual(await service.deleteAccount({ idToken: supervisor.token, confirmEmail: ` ${supervisor.email.toUpperCase()} ` }), { deleted: true });
+  await assert.rejects(adminAuth.getUser(supervisor.uid), (error) => error.code === "auth/user-not-found");
+  const membership = (await db.doc(`spaces/${spaceId}/members/${supervisor.uid}`).get()).data();
+  assert.equal(membership.active, false);
+  assert.equal(membership.emailAtJoining, undefined);
+  assert.equal((await db.doc(`spaces/${spaceId}`).get()).data().invitationVersion, before + 1);
+  assert.equal((await db.collection(`users/${supervisor.uid}/spaceLinks`).get()).size, 0);
+  assert.equal((await db.collection(`users/${supervisor.uid}/learners`).get()).size, 0);
+  assert.equal((await db.doc(`spaces/${spaceId}/drives/${driveId}`).get()).exists, true, "the learner keeps the practice history");
+  await assert.rejects(service.createDrive({ idToken: supervisor.token, spaceId, operationId: randomUUID(), date: "2026-11-02", minutes: "30", nightMinutes: "0", notes: "", supervisorPresentUid: supervisor.uid }), /Not authorized/);
+
+  // Leaving or being removed also drops the stored email.
+  await service.removeMember({ idToken: manager.token, spaceId, memberUid: learner.uid });
+  assert.equal((await db.doc(`spaces/${spaceId}/members/${learner.uid}`).get()).data().emailAtJoining, undefined);
+
+  // Once the manager has deleted the space, their account can go too.
+  await service.deleteSpace({ idToken: manager.token, spaceId, confirmName: "Deletion learner" });
+  assert.deepEqual(await service.deleteAccount({ idToken: manager.token, confirmEmail: manager.email }), { deleted: true });
+  await assert.rejects(adminAuth.getUser(manager.uid), (error) => error.code === "auth/user-not-found");
+});
+
+test("account deletion revokes other sessions before removing anything", async () => {
+  const { learner, spaceId } = await deletionFixture("revoke");
+  currentTime = Date.now();
+  const otherTab = learner.token;
+  await new Promise((resolve) => setTimeout(resolve, 1100)); // revocation has one-second resolution
+  let revokedFirst = false;
+  const watching = createSharedAccessService({ db, now: () => currentTime, auth: new Proxy(adminAuth, { get(target, key) {
+    if (key === "revokeRefreshTokens") return async (uid) => { revokedFirst = (await db.doc(`users/${uid}/spaceLinks/${spaceId}`).get()).exists; await target.revokeRefreshTokens(uid); throw new Error("simulated outage"); };
+    const value = target[key]; return typeof value === "function" ? value.bind(target) : value;
+  } }) });
+  await assert.rejects(watching.deleteAccount({ idToken: learner.token, confirmEmail: learner.email }), /simulated outage/);
+  assert.equal(revokedFirst, true, "nothing was removed before the revocation");
+  await assert.rejects(service.leaveSpace({ idToken: otherTab, spaceId }), /Not authorized/, "earlier sessions stop working");
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  await signInWithEmailAndPassword(learner.auth, learner.email, "synthetic-password-123");
+  const fresh = await learner.auth.currentUser.getIdToken(true);
+  assert.deepEqual(await service.deleteAccount({ idToken: fresh, confirmEmail: learner.email }), { deleted: true });
+});

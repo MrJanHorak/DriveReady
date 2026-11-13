@@ -15,7 +15,7 @@ It is a working prototype. Use fictional data only: security and privacy review 
 - **Drive timer:** the passenger starts it as the drive begins, pauses it for stops, and taps **Stop & log** to open the drive form with the date and minutes filled in. It survives reloads and a locked phone (kept in that browser), keeps the screen awake where supported, and clears once the drive is saved.
 - **Night minutes:** give a drive a start time (the timer fills it in) and the form suggests how many minutes fell after sunset or before sunrise, at the route's start point or the Augusta area, and fills them in. Georgia DDS doesn't define "night", so the suggestion can always be changed.
 - **Printable practice log:** **Print log** on Driving Logs previews a one-learner log (every drive in date order with route, duration, night minutes, skills, supervisor and notes; totals against Georgia's 40/6; signature lines) and prints it or saves it as PDF through the browser. It is a personal record, not an official DDS form.
-- **Deleting and leaving:** delete drives and routes you're allowed to edit; supervisors and learners can leave a space; the managing supervisor can delete a learner's whole space after typing the learner's name.
+- **Deleting and leaving:** delete drives and routes you're allowed to edit; supervisors and learners can leave a space; the managing supervisor can delete a learner's whole space after typing the learner's name. Anyone can delete their own account under **Account** after confirming their email and password; managers delete their learner spaces first.
 - **Privacy notice:** the **Privacy** page explains in plain language what is stored, who can see it and which outside services are involved.
 - **State requirements:** a sourced Georgia DDS overview with links. Other states are not covered yet.
 
@@ -83,7 +83,7 @@ Map tiles come from the public OpenStreetMap tile service by default, which sees
 | `npm run typecheck` | TypeScript checks for the app (`tsconfig.json`, strict) | Node only |
 | `npm run test:rules` | Firestore security rules | Firebase CLI, Java 21+ |
 | `npm run test:shared` | Shared-space service, local gateway and the deployable server | Firebase CLI, Java 21+ |
-| `npm run test:browser` | The app in Chrome: dashboard, routes, logs, invitations, route sync | + Chrome |
+| `npm run test:browser` | The app in Chrome: dashboard, routes, logs, timer, print log, invitations, deletion, route sync | + Chrome |
 
 Emulator tests use a `demo-` project and synthetic accounts; they never touch a real project. Run `npm run build` to check the production build.
 
@@ -93,6 +93,7 @@ Emulator tests use a `demo-` project and synthetic accounts; they never touch a 
 
 - `src/app/App.tsx`: app shell (sidebar, header, navigation).
 - `src/app/Workspace.tsx`, `FirebaseAccount.tsx`: the main content area, sign-in and account, or a setup notice when no shared service is configured.
+- `src/app/DeleteAccount.tsx`: deleting your own account from the Account page.
 - `src/app/design.tsx`: the Figma visual building blocks (cards, progress ring and bars, skill chips, route sketch). Reuse these for new screens; see `guidelines/Guidelines.md`.
 - `src/app/SharedDashboard.tsx`, `SharedRoutes.tsx`, `SharedPractice.tsx`, `SharedSpaces.tsx`: dashboard, routes, driving logs, and people & access.
 - `src/app/sharedClient.js`: decides demo or hosted mode, reads shared data from Firestore and calls the shared service.

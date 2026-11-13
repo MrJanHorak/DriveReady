@@ -20,6 +20,7 @@ export const ROUTES = Object.freeze({
   "/v1/drives/delete": { action: "deleteDrive", fields: ["spaceId", "driveId", "expectedRevision"] },
   "/v1/spaces/leave": { action: "leaveSpace", fields: ["spaceId"] },
   "/v1/spaces/delete": { action: "deleteSpace", fields: ["spaceId", "confirmName"] },
+  "/v1/account/delete": { action: "deleteAccount", fields: ["confirmEmail"] },
 });
 
 function readBody(req) {

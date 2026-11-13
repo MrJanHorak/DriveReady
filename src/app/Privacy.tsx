@@ -56,7 +56,7 @@ export default function Privacy() {
           <li>Delete drives and routes you’re allowed to edit, under <strong>Driving Logs</strong> and <strong>Routes</strong>.</li>
           <li>Leave a learner’s space under <strong>People &amp; access</strong>. You lose access; what you recorded stays with the learner’s practice history.</li>
           <li>A managing supervisor can delete a learner’s whole space, which permanently removes its drives, routes, notes and invitations.</li>
-          <li>Deleting your sign-in account isn’t available in the app yet. Until it is, contact the project maintainer to have it removed.</li>
+          <li>Delete your account under <strong>Account</strong>. You confirm with your email and password; if you manage a learner’s space, delete that space first. Your sign-in, your access and your email on the spaces you belonged to are removed. Drives and routes you recorded stay in the learner’s practice history.</li>
           <li>Printed or saved practice logs, screenshots and copies others have already downloaded can’t be recalled from inside the app.</li>
         </ul>
       </Section>
