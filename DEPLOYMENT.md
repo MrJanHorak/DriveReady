@@ -33,7 +33,7 @@ The service is one Node process with no framework. It runs on any Node 22+ host 
 1. In Railway, create a project → **Deploy from GitHub repo** → choose this repository.
 2. Under **Variables**, add the settings below (also listed in [service-variables.example](service-variables.example)).
 3. Under **Settings → Networking**, select **Generate Domain** to get a public `https://…up.railway.app` address.
-4. Deploy. `railway.json` sets the start command (`npm run start:service`) and the health check (`/health`). The log should show `DriveReady shared service listening …` with your project and allowed origins.
+4. Deploy. `railway.json` sets the start command (`node server/main.mjs`, started directly so a normal shutdown during redeploys isn't reported as an npm error) and the health check (`/health`). The log should show `DriveReady shared service listening …` with your project and allowed origins.
 5. Check it: opening `https://<your-domain>/health` in a browser should return `{"ok":true}`.
 
 | Variable | Required | Example / notes |

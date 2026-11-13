@@ -1,5 +1,7 @@
 # DriveReady
 
+[![CI](https://github.com/MrJanHorak/DriveReady/actions/workflows/ci.yml/badge.svg)](https://github.com/MrJanHorak/DriveReady/actions/workflows/ci.yml)
+
 DriveReady helps families and other supervisors guide learner drivers: plan practice routes on a map, log supervised drives with the skills and conditions practised, and track progress toward Georgia's supervised-driving hours. The first pilot area is Augusta, Georgia.
 
 It is a working prototype. Use fictional data only: security and privacy review is still needed before real family data (see [SECURITY_REVIEW.md](SECURITY_REVIEW.md)). Logs are a personal record, not official certification, and DriveReady does not give legal or navigation guidance.
@@ -79,6 +81,8 @@ Map tiles come from the public OpenStreetMap tile service by default, which sees
 | `npm run test:browser` | The app in Chrome: dashboard, routes, logs, invitations, route sync | + Chrome |
 
 Emulator tests use a `demo-` project and synthetic accounts; they never touch a real project. Run `npm run build` to check the production build.
+
+**CI:** `.github/workflows/ci.yml` runs on every push to `main` and every pull request. One job runs unit tests, the type check, the service syntax check and the build; the other runs the rules, service and browser tests against the emulators (Java 21, Firebase CLI, the runner's Chrome). When browser tests fail, their screenshots and traces are attached to the run as `playwright-results`. Vercel and Railway still deploy on push; to make them wait for CI, turn on branch protection for `main` with both CI checks required and work through pull requests.
 
 ## Project structure
 

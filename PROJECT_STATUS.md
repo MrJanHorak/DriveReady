@@ -22,7 +22,7 @@ All suites pass as of this update: unit (`npm test`), type check, rules, service
 
 ## Next steps
 
-1. **CI:** a GitHub Actions workflow running `npm test`, `npm run typecheck`, the emulator suites and the build on every push, so problems are caught before Vercel and Railway deploy them.
+1. **CI (added November 12):** `.github/workflows/ci.yml` runs every suite and the build on each push and pull request. Optionally require it through branch protection on `main`.
 2. **Make logging easier:** a drive timer for the passenger, automatic night minutes from sunset times, and a printable practice log.
 3. **Before real families:** privacy notice, data and account deletion, backups, a reviewed routing and tile provider, invitation delivery, and independent security review ([SECURITY_REVIEW.md](SECURITY_REVIEW.md)).
 4. **Housekeeping:** choose a Railway plan before the trial ends. Optionally delete the retired `users/{uid}/learners` and `users/{uid}/drives` test records in the Firebase console.
