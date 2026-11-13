@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Printer } from "lucide-react";
 import type { DocumentSnapshot } from "firebase/firestore";
 import { readSharedDrives, readSharedRoutes, readSharedRoute, sharedAccessRequest, sharedAccessDemo } from "./sharedClient";
 import SharedRouteCard from "./SharedRouteCard";
@@ -9,6 +10,7 @@ import { SkillTag, ghostButton, heading, mono, primaryButton } from "./design";
 import { PILOT_AREA, nightMinutes as nightOverlap, sunTimes } from "./sunTimes";
 import { formatDate, formatDuration } from "./SharedDashboard";
 import DriveTimer, { type TimerDraft } from "./DriveTimer";
+import PracticeLog from "./PracticeLog";
 import { loadTimer, saveTimer } from "./timerState";
 
 type Space = { id: string; learnerName: string; role: string };
@@ -44,6 +46,7 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
   const [scrollToForm, setScrollToForm] = useState(false);
   const [editing, setEditing] = useState<Drive | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
   useEffect(() => { if (scrollToForm && formRef.current) { formRef.current.scrollIntoView({ block: "start", behavior: "smooth" }); setScrollToForm(false); } }, [scrollToForm, formOpen]);
   const dateInput = useRef<HTMLInputElement>(null);
   const routeSelect = useRef<HTMLSelectElement>(null);
@@ -240,7 +243,7 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
     <h4 className="text-base font-bold" style={heading}>{sharedAccessDemo ? "Shared practice · local emulator" : "Shared practice"}</h4>
         <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground" style={mono}>Practice learner<select className={`${field} mt-1 max-w-sm text-sm normal-case tracking-normal text-foreground`} style={{ fontFamily: "'Inter', sans-serif" }} value={selected} disabled={blocked || !!pending} onChange={(event) => { if (event.target.value === selected) return; if ((date || minutes || notes || routeId || skills.length || conditions.length) && !window.confirm("Discard the current unsaved practice form and switch learners?")) return; generation.current += 1; routeGeneration.current += 1; setDrives([]); setCursor(null); setHistoryLoaded(false); setRoutes([]); setRouteCursor(null); resetForm(); setRouteNotice(""); setSelected(event.target.value); setMessage(""); }}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.learnerName} · {item.role}</option>)}</select></label>
     <div className="mt-3"><DriveTimer uid={uid} spaces={spaces} spaceId={selected} blocked={blocked || !!pending} onLog={(spaceId, draft) => openLogForm({ spaceId, draft })} /></div>
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><h5 className="text-base font-bold" style={heading}>Practice history</h5><div className="flex gap-2"><button type="button" className={button} disabled={blocked || !selected} onClick={() => void refreshHistory()}>Refresh practice history</button>{canRecord && !formOpen && <button type="button" className={primaryButton} disabled={blocked} onClick={() => setFormOpen(true)}>Log a drive</button>}</div></div>
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><h5 className="text-base font-bold" style={heading}>Practice history</h5><div className="flex flex-wrap gap-2"><button type="button" className={button} disabled={blocked || !selected} onClick={() => void refreshHistory()}>Refresh practice history</button><button type="button" className={button} disabled={blocked || !selected} onClick={() => setLogOpen(true)}><Printer size={14} aria-hidden="true" /> Print log</button>{canRecord && !formOpen && <button type="button" className={primaryButton} disabled={blocked} onClick={() => setFormOpen(true)}>Log a drive</button>}</div></div>
     {canRecord && formOpen && <form ref={formRef} className="mt-4 grid scroll-mt-4 gap-4 rounded-2xl border border-[#0C7A8D]/25 bg-card p-5 shadow-sm sm:grid-cols-2" onSubmit={submit}>
       <h5 className="text-base font-bold sm:col-span-2" style={heading}>{editing ? "Edit practice" : "Log a drive"}{space ? ` · ${space.learnerName}` : ""}</h5>
       {editing ? <p className="font-semibold sm:col-span-2">Editing practice from {editing.date}. The recorded route and reported supervisor stay the same.</p> : <p className="text-xs text-muted-foreground sm:col-span-2">You are recorded as the supervisor present. This is self-reported, not independently verified.</p>}
@@ -271,5 +274,6 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
     {cursor && <button type="button" className={`${button} mt-2`} disabled={blocked || loadingMore} onClick={() => void loadMoreHistory()}>{loadingMore ? "Loading drives…" : "Load older drives"}</button>}
     {pending && !canRecord && <div className="mt-3 rounded border border-amber-400 p-3"><p>The pending save cannot be retried because this account no longer has supervisor access to its space. It may already have saved.</p>{!discarding ? <button type="button" className={`${button} mt-2`} disabled={blocked} onClick={() => setDiscarding(true)}>Discard retry details</button> : <div className="mt-2 flex gap-2"><button type="button" className={button} disabled={blocked} onClick={() => { pendingRef.current = null; setPending(null); setDiscarding(false); setSelected(spaces[0]?.id ?? ""); }}>Confirm discard</button><button type="button" className={button} onClick={() => setDiscarding(false)}>Keep retry details</button></div>}</div>}
     {message && <p role="status" className="mt-2">{message}</p>}
+    {logOpen && space && <PracticeLog uid={uid} spaceId={space.id} learnerName={space.learnerName} onClose={() => setLogOpen(false)} />}
   </section>;
 }

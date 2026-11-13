@@ -1,0 +1,12 @@
+/* Printing the practice log (src/app/PracticeLog.tsx): only the log sheet is printed. */
+@media print {
+  @page { margin: 14mm; }
+  html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+  body.printing-log #root { display: none !important; }
+  .print-log { position: static !important; inset: auto !important; overflow: visible !important; background: none !important; padding: 0 !important; }
+  .print-log-toolbar { display: none !important; }
+  .print-log-sheet { max-width: none !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; }
+  .print-log thead { display: table-header-group; }
+  .print-log tr { break-inside: avoid; }
+  .print-log * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

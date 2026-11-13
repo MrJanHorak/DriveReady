@@ -15,6 +15,7 @@ DriveReady is deployed for development: the web app on Vercel (https://drive-rea
 | Driving logs | Drives use a mapped route and record skills, conditions and notes. Edits keep attribution and detect conflicts; retries are safe. New routes appear automatically. |
 | Drive timer | Start, pause, resume, stop & log on the Dashboard and Driving Logs; fills the date and minutes; survives reloads; keeps the screen awake where supported. |
 | Night minutes | Suggested from an optional start time, the drive length and the route's start point (sunrise/sunset within about a minute of reference values); filled in unless changed by hand. The drive form now has the Figma styling. Start times are not stored with drives. |
+| Practice log | Printable one-learner log with totals, every drive and signature lines; prints or saves as PDF through the browser. Supervisor emails show for managers; others see "Supervisor". |
 | People & access | Spaces, one-time invitations shared by hand, removal. |
 | Shared service | Deployed (`server/main.mjs`): origin allow-list, rate limit, request logs that record no content. |
 | Code health | Unused Figma-export kit and about 50 unused dependencies removed; strict TypeScript check (`npm run typecheck`) passes. |
@@ -25,7 +26,7 @@ All suites pass as of this update: unit (`npm test`), type check, rules, service
 ## Next steps
 
 1. **CI (added November 12):** `.github/workflows/ci.yml` runs every suite and the build on each push and pull request. Optionally require it through branch protection on `main`.
-2. **Make logging easier:** the drive timer and night-minute suggestions are done (November 13). Next: a printable practice log for the Georgia DDS certification.
+2. **Make logging easier:** done (November 13): drive timer, night-minute suggestions and the printable practice log.
 3. **Before real families:** privacy notice, data and account deletion, backups, a reviewed routing and tile provider, invitation delivery, and independent security review ([SECURITY_REVIEW.md](SECURITY_REVIEW.md)).
 4. **Housekeeping:** choose a Railway plan before the trial ends. Optionally delete the retired `users/{uid}/learners` and `users/{uid}/drives` test records in the Firebase console.
 
