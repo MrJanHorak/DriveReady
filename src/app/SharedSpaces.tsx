@@ -115,7 +115,7 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
   const blocked = busy || disabled || !verified || uncertain;
   const onDashboard = page === "dashboard";
   // Dashboard and Routes lay out their own cards; other pages sit in one card.
-  const bare = onDashboard || page === "routes";
+  const bare = onDashboard || page === "routes" || page === "logs";
   return <section className={bare ? "" : "rounded-2xl border border-border bg-card p-4 sm:p-5"}>
     <h3 className={bare ? "sr-only" : "font-semibold"}>{sharedAccessDemo ? "Shared spaces · local emulator only" : "Shared spaces"}</h3>
     {!verified && <p className="mt-2 text-sm">{sharedAccessDemo ? "Verify your email in the emulator to use this test." : "Verify your email under Account to add learners or accept invitations."}</p>}

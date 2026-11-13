@@ -101,5 +101,5 @@ export function RouteSketch({ geometry, roadPolyline, width = 96, height = 68, l
   </div>;
 }
 
-export const primaryButton = "inline-flex items-center gap-2 rounded-lg bg-[#0C7A8D] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-[#0A6A7B] hover:shadow-md disabled:opacity-50";
+export const primaryButton = "inline-flex flex-shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-[#0C7A8D] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-[#0A6A7B] hover:shadow-md disabled:opacity-50";
 export const ghostButton = "inline-flex flex-shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50";
