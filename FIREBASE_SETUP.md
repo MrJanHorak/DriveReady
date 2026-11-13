@@ -33,9 +33,25 @@ See [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md) for roles and permissions
 | `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID` | From Firebase console → Project settings → Your apps |
 | `VITE_SHARED_API_URL` | The hosted shared service, e.g. your Railway address ([DEPLOYMENT.md](DEPLOYMENT.md)) |
 
+Optional map settings are described under [Map and routing providers](#map-and-routing-providers).
+
 These values are built into the browser code; they are not secrets. The service-account key used by the service is a secret and belongs only in the service host's variables.
 
 For a deployed web app, add its domain under Authentication → Settings → **Authorized domains**.
+
+## Map and routing providers
+
+By default the maps use the public OpenStreetMap tiles and **Follow roads** uses the public OSRM demo server. Both are for light testing only. To switch, set these web app variables (in `.env.development.local` or on Vercel) and rebuild:
+
+| Variable | Value |
+| --- | --- |
+| `VITE_ROUTING_URL` | Base address of an OSRM-compatible routing server, for example a self-hosted OSRM (`https://osrm.your-domain.com`). It may include a path and query string, such as an API key, which are kept on every request. https only, except `localhost`/`127.0.0.1`. The app calls `<base>/route/v1/driving/<points>`. An invalid value turns road snapping off with a message instead of falling back to the demo. |
+| `VITE_MAP_TILE_URL` | A tile template such as `https://tiles.provider.com/{z}/{x}/{y}.png` (include the provider's key if it needs one). |
+| `VITE_MAP_TILE_ATTRIBUTION` | The credit line your tile provider requires, as plain text. Without it, OpenStreetMap is credited. |
+
+Anything in these variables, API keys included, is visible in the browser. Use keys the provider lets you restrict to your site's domain. When a custom provider is set, the Privacy page names it generically ("the provider configured for this site"); update the notice if you want it named.
+
+Choosing a provider for a pilot is still open: compare a self-hosted OSRM (free software, but you run and update the server and map data) with a hosted service that offers an OSRM-compatible API, and check each one's terms, privacy and pricing.
 
 ## Rules
 

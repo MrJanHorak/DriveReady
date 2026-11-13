@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Card, heading, mono } from "./design";
+import { PRIVACY_CONTACT, privacyContactIsPlaceholder } from "./contact";
+import { routing, tiles } from "./mapProviders";
 
 // Plain-language privacy notice for the development preview. Keep it in step with
 // what the code and hosting actually do (see FIREBASE_SETUP.md and DEPLOYMENT.md).
@@ -45,8 +47,8 @@ export default function Privacy() {
           <li><strong>Google Firebase</strong> (Authentication and Cloud Firestore, United States) stores accounts and practice data.</li>
           <li><strong>Railway</strong> runs DriveReady’s service, which checks permissions and saves changes. DriveReady’s own request logs record only the request path, result and timing.</li>
           <li><strong>Vercel</strong> serves the web app.</li>
-          <li><strong>OpenStreetMap</strong> provides the map images, so it sees the map area you view and your internet address.</li>
-          <li><strong>OSRM</strong> (a public routing demo) receives the map points you choose when you select <em>Follow roads</em> or save a route.</li>
+          <li>{tiles.custom ? <><strong>The map image provider</strong> configured for this site</> : <><strong>OpenStreetMap</strong></>} provides the map images, so it sees the map area you view and your internet address.</li>
+          <li>{routing.custom ? <><strong>The road-routing provider</strong> configured for this site</> : <><strong>OSRM</strong> (a public routing demo)</>} receives the map points you choose when you select <em>Follow roads</em> or save a route.</li>
         </ul>
         <p>Hosting providers may keep their own technical access logs under their own terms. DriveReady has no advertising or analytics trackers. Printing or saving a practice log as PDF happens in your browser; nothing extra is sent.</p>
       </Section>
@@ -59,6 +61,11 @@ export default function Privacy() {
           <li>Delete your account under <strong>Account</strong>. You confirm with your email and password; if you manage a learner’s space, delete that space first. Your sign-in, your access and your email on the spaces you belonged to are removed. Drives and routes you recorded stay in the learner’s practice history.</li>
           <li>Printed or saved practice logs, screenshots and copies others have already downloaded can’t be recalled from inside the app.</li>
         </ul>
+      </Section>
+
+      <Section title="Questions and requests">
+        <p>To ask what is stored about you, to correct something, or for help deleting data, email <a className="font-medium text-[#0C7A8D] underline" href={`mailto:${PRIVACY_CONTACT}`}>{PRIVACY_CONTACT}</a>.</p>
+        {privacyContactIsPlaceholder && <p className="rounded-lg bg-amber-50 p-3 text-amber-900">This address is a placeholder and isn’t monitored yet.</p>}
       </Section>
     </Card>
   </div></main>;

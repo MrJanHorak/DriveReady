@@ -17,7 +17,7 @@ DriveReady is deployed for development: the web app on Vercel (https://drive-rea
 | Night minutes | Suggested from an optional start time, the drive length and the route's start point (sunrise/sunset within about a minute of reference values); filled in unless changed by hand. The drive form now has the Figma styling. Start times are not stored with drives. |
 | Practice log | Printable one-learner log with totals, every drive and signature lines; prints or saves as PDF through the browser. Supervisor emails show for managers; others see "Supervisor". |
 | Deletion | Drives, routes, leaving a space, deleting a whole space (manager, name confirmation), and deleting your own account (email and password confirmation; managers delete their spaces first); permanent. |
-| Privacy notice | In-app plain-language page (not a reviewed policy); linked from sign-in. |
+| Privacy notice | In-app plain-language page (not a reviewed policy); linked from sign-in. The contact address is a placeholder (`src/app/contact.js`). |
 | People & access | Spaces, one-time invitations shared by hand, removal. |
 | Shared service | Deployed (`server/main.mjs`): origin allow-list, rate limit, request logs that record no content. |
 | Code health | Unused Figma-export kit and about 50 unused dependencies removed; strict TypeScript check (`npm run typecheck`) passes. |
@@ -29,7 +29,7 @@ All suites pass as of this update: unit (`npm test`), type check, rules, service
 
 1. **CI (added November 12):** `.github/workflows/ci.yml` runs every suite and the build on each push and pull request. Optionally require it through branch protection on `main`.
 2. **Make logging easier:** done (November 13): drive timer, night-minute suggestions and the printable practice log.
-3. **Before real families:** privacy notice and in-app deletion done (November 13). Account deletion done (November 13). Remaining: a contact for privacy requests, backups, a reviewed routing and tile provider, invitation delivery, and independent security review ([SECURITY_REVIEW.md](SECURITY_REVIEW.md)).
+3. **Before real families:** privacy notice and in-app deletion done (November 13). Account deletion done (November 13). Routing and tile providers are now configurable (`VITE_ROUTING_URL`, `VITE_MAP_TILE_URL`, `VITE_MAP_TILE_ATTRIBUTION`). Remaining: a real privacy inbox to replace the placeholder, backups (plan and commands in [OPERATIONS.md](OPERATIONS.md)), choosing a routing and tile provider, invitation delivery, and independent security review ([SECURITY_REVIEW.md](SECURITY_REVIEW.md)).
 4. **Housekeeping:** choose a Railway plan before the trial ends. Optionally delete the retired `users/{uid}/learners` and `users/{uid}/drives` test records in the Firebase console.
 
 ## Known limits

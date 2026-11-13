@@ -73,13 +73,13 @@ The demo starts local Auth and Firestore emulators, the local shared gateway and
 
 ## Maps and routing
 
-Map tiles come from the public OpenStreetMap tile service by default, which sees the area you view; set `VITE_MAP_TILE_URL` to use another OpenStreetMap-compatible provider. **Follow roads** sends the chosen points to the public [OSRM demo server](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server). That server is free for light, non-commercial testing (about one request per second) and has no availability guarantee. A pilot needs a paid routing provider or a self-hosted OSRM, and a reviewed tile provider. Suggested routes use mapped road restrictions, which can be incomplete. They are not turn-by-turn navigation, so follow signs and the actual road. Dashboard route thumbnails are drawn from saved points and load no tiles.
+Map tiles come from the public OpenStreetMap tile service by default, which sees the area you view. **Follow roads** sends the chosen points to the public [OSRM demo server](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server) by default. Both can be switched without code changes; see [Map and routing providers](FIREBASE_SETUP.md#map-and-routing-providers). That server is free for light, non-commercial testing (about one request per second) and has no availability guarantee. A pilot needs a paid routing provider or a self-hosted OSRM, and a reviewed tile provider. Suggested routes use mapped road restrictions, which can be incomplete. They are not turn-by-turn navigation, so follow signs and the actual road. Dashboard route thumbnails are drawn from saved points and load no tiles.
 
 ## Tests
 
 | Command | What it covers | Needs |
 | --- | --- | --- |
-| `npm test` | Route-line decoding, service config and HTTP handler | Node only |
+| `npm test` | Sun times, drive timer, route-line decoding, map/routing settings, service config and HTTP handler | Node only |
 | `npm run typecheck` | TypeScript checks for the app (`tsconfig.json`, strict) | Node only |
 | `npm run test:rules` | Firestore security rules | Firebase CLI, Java 21+ |
 | `npm run test:shared` | Shared-space service, local gateway and the deployable server | Firebase CLI, Java 21+ |
@@ -97,7 +97,8 @@ Emulator tests use a `demo-` project and synthetic accounts; they never touch a 
 - `src/app/design.tsx`: the Figma visual building blocks (cards, progress ring and bars, skill chips, route sketch). Reuse these for new screens; see `guidelines/Guidelines.md`.
 - `src/app/SharedDashboard.tsx`, `SharedRoutes.tsx`, `SharedPractice.tsx`, `SharedSpaces.tsx`: dashboard, routes, driving logs, and people & access.
 - `src/app/sharedClient.js`: decides demo or hosted mode, reads shared data from Firestore and calls the shared service.
-- `src/app/RouteMap.tsx`, `SharedRouteCard.tsx`, `followRoads.js`, `routePolyline.js`: Leaflet maps, OSRM request and route-line decoding.
+- `src/app/RouteMap.tsx`, `SharedRouteCard.tsx`, `followRoads.js`, `routePolyline.js`, `mapProviders.js`: Leaflet maps, the routing request, route-line decoding, and which tile and routing providers are used.
+- `src/app/Privacy.tsx`, `contact.js`: the privacy notice and its contact address (a placeholder until a real inbox exists).
 - `src/app/practiceData.js`, `PracticeChoices.tsx`: the skills and conditions catalogue (also used by the service) and its checkboxes.
 - `src/app/StateRequirements.tsx`: the Georgia overview.
 - `server/sharedAccess.mjs`: the trusted shared-space service (memberships, invitations, routes, drives).
@@ -114,5 +115,6 @@ Emulator tests use a `demo-` project and synthetic accounts; they never touch a 
 - [SHARED_ACCESS_DESIGN.md](SHARED_ACCESS_DESIGN.md): roles, permissions, invitations and data model
 - [FIREBASE_SETUP.md](FIREBASE_SETUP.md): Firebase projects, rules and environment settings
 - [SECURITY_REVIEW.md](SECURITY_REVIEW.md): internal review and blockers for a real-data pilot
+- [OPERATIONS.md](OPERATIONS.md): project inbox, map and routing providers, and backups (costs, setup, restoring)
 
 The original design is [Desktop Web Dashboard Design on Figma](https://www.figma.com/design/Whz9TgPqbRKDzbyiPCFKKg/Desktop-Web-Dashboard-Design). See `ATTRIBUTIONS.md` for attribution.

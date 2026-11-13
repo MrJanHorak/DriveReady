@@ -1,11 +1,12 @@
 import { decodeRoutePolyline } from "./routePolyline";
+import { routing, routingRequest } from "./mapProviders";
 
-// Local fictional-data demo only. Called only after the user requests a route.
+// Asks the configured OSRM-compatible server (VITE_ROUTING_URL; the public demo by
+// default) for a road route. Called only after the user requests one.
 export async function followRoads(points, signal) {
   if (!Array.isArray(points) || points.length < 2 || points.length > 50 || points.some((point) => !Number.isFinite(point.lat) || !Number.isFinite(point.lng) || Math.abs(point.lat) > 85 || Math.abs(point.lng) > 180)) throw new Error("Select at least two valid points.");
-  const coordinates = points.map((point) => `${point.lng.toFixed(5)},${point.lat.toFixed(5)}`).join(";");
-  const url = new URL(`https://router.project-osrm.org/route/v1/driving/${coordinates}`);
-  url.search = new URLSearchParams({ geometries: "polyline", overview: "full", steps: "false", generate_hints: "false", radiuses: points.map(() => "150").join(";") }).toString();
+  if (!routing.valid) throw new Error("Road snapping isn't set up correctly on this site (VITE_ROUTING_URL).");
+  const url = routingRequest(routing.url, points);
   const response = await fetch(url, { signal, credentials: "omit", redirect: "error" });
   if (!response.ok) throw new Error("Could not find a road route. Check the points and try again.");
   const data = await response.json();

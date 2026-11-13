@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { tiles as tileProvider } from "./mapProviders";
 
 export type RoutePoint = { lat: number; lng: number };
 const initialCenter: L.LatLngExpression = [33.4735, -82.0105];
-// The demo tile source can be switched without rebuilding application code.
-const tileUrl = import.meta.env.VITE_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 // interactive: drawing map (click adds points). browse: pan/zoom a saved route without drawing.
 export default function RouteMap({ points, path, onAddPoint, interactive = false, browse = false, heightClass, label }: { points: RoutePoint[]; path?: RoutePoint[]; onAddPoint?: (point: RoutePoint) => void; interactive?: boolean; browse?: boolean; heightClass?: string; label: string }) {
@@ -28,7 +27,7 @@ export default function RouteMap({ points, path, onAddPoint, interactive = false
     const instance = L.map(element.current, { zoomControl: navigable, dragging: navigable, scrollWheelZoom: navigable, doubleClickZoom: navigable, touchZoom: navigable, boxZoom: navigable, keyboard: navigable, attributionControl: true }).setView(initialCenter, 13);
     element.current.dataset.zoom = String(instance.getZoom());
     instance.on("zoomend", () => { if (element.current) element.current.dataset.zoom = String(instance.getZoom()); });
-    const tiles = L.tileLayer(tileUrl, { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' });
+    const tiles = L.tileLayer(tileProvider.url, { maxZoom: 19, attribution: tileProvider.attribution });
     let loadedTiles = 0, failedTiles = 0;
     tiles.on("loading", () => { loadedTiles = 0; failedTiles = 0; });
     tiles.on("tileload", () => { loadedTiles += 1; setMapUnavailable(false); });
