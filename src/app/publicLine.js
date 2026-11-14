@@ -1,7 +1,13 @@
-// Prepares a route line for the public library. The first and last stretch of a
-// learner's route is often their street, so both are cut off before sharing.
+// Prepares a route line for the public library. Learners often start or end at home
+// and loops come back past it, so every part of the line that comes within a privacy
+// circle of the start, the end, or any private place the manager marked is removed,
+// wherever along the route it happens. Only the longest remaining stretch is shared.
 const EARTH_M = 6371008.8;
 const rad = (deg) => (deg * Math.PI) / 180;
+export const MIN_PRIVACY_RADIUS_M = 400;
+export const MAX_PRIVACY_RADIUS_M = 600;
+export const MIN_SHARED_LENGTH_M = 400;
+export const MAX_PRIVATE_PLACES = 5;
 
 /** Distance in metres between two points. */
 export function distanceM(a, b) {
@@ -15,26 +21,38 @@ export function lineLengthM(points) {
   return total;
 }
 const round5 = (value) => Math.round(value * 1e5) / 1e5;
-function pointAlong(points, targetM) {
-  let walked = 0;
+
+// Adds points so no step is longer than `stepM`; cuts are then accurate to that.
+function densify(points, stepM = 20) {
+  const out = [points[0]];
   for (let i = 1; i < points.length; i += 1) {
-    const step = distanceM(points[i - 1], points[i]);
-    if (walked + step >= targetM) {
-      const t = step ? (targetM - walked) / step : 0;
-      return { index: i, point: { lat: round5(points[i - 1].lat + (points[i].lat - points[i - 1].lat) * t), lng: round5(points[i - 1].lng + (points[i].lng - points[i - 1].lng) * t) } };
-    }
-    walked += step;
+    const a = points[i - 1], b = points[i], parts = Math.ceil(distanceM(a, b) / stepM);
+    for (let k = 1; k <= parts; k += 1) out.push({ lat: a.lat + ((b.lat - a.lat) * k) / parts, lng: a.lng + ((b.lng - a.lng) * k) / parts });
   }
-  return { index: points.length - 1, point: points[points.length - 1] };
+  return out;
 }
 
-/** Removes `trimM` metres from each end. Returns null when too little would be left. */
-export function trimLine(points, trimM = 300, minRemainingM = 400) {
-  const total = lineLengthM(points);
-  if (total - 2 * trimM < minRemainingM) return null;
-  const start = pointAlong(points, trimM), end = pointAlong(points, total - trimM);
-  const middle = points.slice(start.index, end.index).map((p) => ({ lat: round5(p.lat), lng: round5(p.lng) }));
-  return [start.point, ...middle, end.point];
+/** Valid private places: up to five {lat, lng} points. @param {unknown} value */
+export function validPrivatePlaces(value) {
+  return Array.isArray(value) && value.length <= MAX_PRIVATE_PLACES && value.every((p) => p && typeof p === "object" && Number.isFinite(p.lat) && Number.isFinite(p.lng) && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180);
+}
+
+/**
+ * The part of a route that may be shared, or null when too little is left.
+ * @param {{lat:number,lng:number}[]} points the full road line
+ * @param {{lat:number,lng:number}[]} privatePlaces extra places to keep clear of
+ * @param {number} radiusM privacy circle radius
+ */
+export function publicLine(points, privatePlaces = [], radiusM = MIN_PRIVACY_RADIUS_M) {
+  if (!Array.isArray(points) || points.length < 2) return null;
+  const centers = [points[0], points[points.length - 1], ...privatePlaces];
+  const outside = (p) => centers.every((c) => distanceM(p, c) > radiusM);
+  let best = [], bestLength = 0, run = [];
+  const finish = () => { const length = lineLengthM(run); if (length > bestLength) { best = run; bestLength = length; } run = []; };
+  for (const point of densify(points)) { if (outside(point)) run.push(point); else if (run.length) finish(); }
+  if (run.length) finish();
+  if (bestLength < MIN_SHARED_LENGTH_M) return null;
+  return best.map((p) => ({ lat: round5(p.lat), lng: round5(p.lng) }));
 }
 
 /** Keeps at most `max` points, always including both ends. */

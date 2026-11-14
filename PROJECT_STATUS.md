@@ -19,7 +19,7 @@ DriveReady is deployed for development: the web app on Vercel (https://drive-rea
 | Deletion | Drives, routes, leaving a space, deleting a whole space (manager, name confirmation), and deleting your own account (email and password confirmation; managers delete their spaces first); permanent. |
 | Privacy notice | In-app plain-language page (not a reviewed policy); linked from sign-in. The contact address is a placeholder (`src/app/contact.js`). |
 | Learner contributions | Learners suggest routes (the managing supervisor approves or declines them before they can be used) and add reflections to drives (November 13). |
-| Community library | Managers share approved routes (no names, start or end text; ~300 m trimmed from each end); signed-in families browse, filter by skill and save them; reports go to moderators (`MODERATOR_EMAILS`), who remove or dismiss (November 13). |
+| Community library | Managers share approved routes (no names or start/end text; nothing within 400–600 m of the start, end or marked private places, even on loops; preview and confirmation before sharing); signed-in families browse, filter by skill and save them; reports go to moderators (`MODERATOR_EMAILS`), who remove or dismiss (November 13). |
 | People & access | Figma-styled page (November 13): learner spaces, joining with a link, and a manage card per learner with people, invitation links (copy or share; the invitee reviews and joins in one tap), pending invitations, removal and space deletion. |
 | Shared service | Deployed (`server/main.mjs`): origin allow-list, rate limit, request logs that record no content. |
 | Code health | Unused Figma-export kit and about 50 unused dependencies removed; strict TypeScript check (`npm run typecheck`) passes. |

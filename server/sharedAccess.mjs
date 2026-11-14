@@ -3,7 +3,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { decodeRoutePolyline, encodeRoutePolyline } from "../src/app/routePolyline.js";
-import { lineLengthM, samplePoints, trimLine } from "../src/app/publicLine.js";
+import { MAX_PRIVACY_RADIUS_M, MIN_PRIVACY_RADIUS_M, lineLengthM, publicLine, samplePoints, validPrivatePlaces } from "../src/app/publicLine.js";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "../src/app/practiceData.js";
 
 const INVITATION_LIFETIME_MS = 48 * 60 * 60 * 1000;
@@ -465,9 +465,16 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
     await db.collection("publicRouteSources").doc(publicRouteId).delete();
   }
 
-  async function publishRoute({ idToken, spaceId, routeId, name, description = "", area, practicedSkills, practicedConditions }) {
+  // Private places (home, school, work) are used only to cut the line and are never
+  // stored. The privacy radius is 400–600 m, fixed per route so republishing the same
+  // route doesn't reveal more about where its circles are centred.
+  async function publishRoute({ idToken, spaceId, routeId, name, description = "", area, practicedSkills, practicedConditions, privatePlaces = "[]", confirmPrivacy }) {
     const caller = await identity(idToken);
     if (!oneLine(name, 3, 80) || !oneLine(area, 2, 60) || typeof description !== "string" || description.length > 300 || /[\u0000-\u0008\u000b-\u001f]/.test(description)) throw new Error("Invalid public route details.");
+    if (confirmPrivacy !== "yes") throw new Error("Confirm that the shared route shows no private places.");
+    let places;
+    try { places = typeof privatePlaces === "string" && privatePlaces.length <= 600 ? JSON.parse(privatePlaces) : null; } catch { places = null; }
+    if (!validPrivatePlaces(places)) throw new Error("Invalid private places.");
     const skills = practiceTags(practicedSkills, PRACTICE_SKILLS), conditions = practiceTags(practicedConditions, PRACTICE_CONDITIONS);
     const { space, member } = refs(spaceId, caller.uid);
     const route = space.collection("routes").doc(checkId(routeId));
@@ -481,9 +488,10 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       }
       if (!routeApproved(data)) throw new Error("Only an approved route can be shared.");
       if (!data.roadPolyline) throw new Error("Only a route that follows roads can be shared.");
-      const trimmed = trimLine(decodeRoutePolyline(data.roadPolyline));
-      if (!trimmed) throw new Error("This route is too short to share without showing where it starts and ends.");
-      const line = samplePoints(trimmed, 1000);
+      const radius = MIN_PRIVACY_RADIUS_M + (createHash("sha256").update(`${space.id}/${route.id}`).digest().readUInt16BE(0) % (MAX_PRIVACY_RADIUS_M - MIN_PRIVACY_RADIUS_M + 1));
+      const shareable = publicLine(decodeRoutePolyline(data.roadPolyline), places.map(({ lat, lng }) => ({ lat, lng })), radius);
+      if (!shareable) throw new Error("Too little of this route is far enough from its start, end and private places to share.");
+      const line = samplePoints(shareable, 1000);
       const publicRef = db.collection("publicRoutes").doc();
       tx.create(publicRef, { name: name.trim(), description: description.trim(), area: area.trim(), practicedSkills: skills, practicedConditions: conditions, line: encodeRoutePolyline(line), lengthKm: Math.round(lineLengthM(line) / 100) / 10, reportCount: 0, publishedAt: FieldValue.serverTimestamp() });
       tx.create(db.collection("publicRouteSources").doc(publicRef.id), { spaceId: space.id, routeId: route.id, publishedByUid: caller.uid, publishedAt: FieldValue.serverTimestamp() });

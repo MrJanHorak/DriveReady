@@ -46,7 +46,17 @@ test("a manager shares a route, another family saves and reports it, and a moder
     await item.locator("summary").click();
     await item.getByRole("button", { name: "Share with the community…" }).click();
     const form = item.getByRole("form", { name: "Share with the community" });
-    await expect(form).toContainText("Secret Learner Name’s name, the start and destination descriptions and about 300 m at each end are left out.");
+    await expect(form).toContainText("Secret Learner Name’s name and the start and destination descriptions are left out");
+    // Mark a private place on the preview map; the shareable length drops and the form must be re-confirmed.
+    const preview = page.getByRole("region", { name: "Sharing preview map" });
+    await expect(preview).toBeVisible();
+    const before = await form.getByText("will be shared", { exact: false }).textContent();
+    const box = await preview.boundingBox();
+    await preview.click({ position: { x: box.width / 2, y: box.height / 2 } });
+    await expect(form.getByText("Private place 1")).toBeVisible();
+    await expect(form.getByText("will be shared", { exact: false })).not.toHaveText(before);
+    await expect(form.getByRole("button", { name: "Share publicly" })).toBeDisabled();
+    await form.getByLabel("I’ve checked the preview", { exact: false }).check();
     await form.getByLabel("Public name").fill("Lakeside loop with four-way stops");
     await form.getByLabel("General area").fill("Evans");
     await form.getByLabel("What’s it good for?", { exact: false }).fill("Quiet residential streets, then a busier road.");

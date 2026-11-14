@@ -537,19 +537,22 @@ test("learners can add their own reflection to a drive without changing the reco
 test("managers publish approved routes without anything that identifies the family; anyone can save or report them", async () => {
   const { manager, supervisor, learner, outsider, spaceId, routeId } = await deletionFixture("public");
   currentTime = Date.now();
-  const publish = (person, changes = {}) => service.publishRoute({ idToken: person.token, spaceId, routeId, name: "Riverside practice loop", description: "Quiet roads with a few four-way stops.", area: "North Augusta", practicedSkills: JSON.stringify(["Turns"]), practicedConditions: "", ...changes });
+  const publish = (person, changes = {}) => service.publishRoute({ idToken: person.token, spaceId, routeId, name: "Riverside practice loop", description: "Quiet roads with a few four-way stops.", area: "North Augusta", practicedSkills: JSON.stringify(["Turns"]), practicedConditions: "", confirmPrivacy: "yes", ...changes });
   for (const person of [supervisor, learner, outsider]) await assert.rejects(publish(person), /Not authorized/);
   await assert.rejects(publish(manager, { name: "Two\nlines" }), /Invalid public route/);
   await assert.rejects(publish(manager, { area: "" }), /Invalid public route/);
+  await assert.rejects(publish(manager, { confirmPrivacy: "no" }), /Confirm that/);
+  await assert.rejects(publish(manager, { privatePlaces: "not json" }), /Invalid private places/);
+  await assert.rejects(publish(manager, { privatePlaces: JSON.stringify(Array(6).fill({ lat: 33, lng: -82 })) }), /Invalid private places/);
 
   // Proposed and too-short routes can't be shared.
   const proposed = randomUUID();
   await service.createRoute({ idToken: learner.token, spaceId, operationId: proposed, name: "Idea", start: "A", destination: "B", geometry, roadPolyline: testRoadPolyline });
-  await assert.rejects(service.publishRoute({ idToken: manager.token, spaceId, routeId: proposed, name: "Idea", area: "Augusta" }), /approved route/);
+  await assert.rejects(service.publishRoute({ idToken: manager.token, spaceId, routeId: proposed, name: "Idea", area: "Augusta", confirmPrivacy: "yes" }), /approved route/);
   const short = randomUUID();
   const shortLine = encodeRoutePolyline([{ lat: 33.47, lng: -82.01 }, { lat: 33.475, lng: -82.01 }]);
   await service.createRoute({ idToken: supervisor.token, spaceId, operationId: short, name: "Short", start: "A", destination: "B", geometry, roadPolyline: shortLine });
-  await assert.rejects(service.publishRoute({ idToken: manager.token, spaceId, routeId: short, name: "Short hop", area: "Augusta" }), /too short/);
+  await assert.rejects(service.publishRoute({ idToken: manager.token, spaceId, routeId: short, name: "Short hop", area: "Augusta", confirmPrivacy: "yes" }), /Too little of this route/);
 
   const { publicRouteId, created } = await publish(manager);
   assert.equal(created, true);
@@ -608,7 +611,7 @@ test("managers publish approved routes without anything that identifies the fami
 test("unpublishing, deleting the route or deleting the space removes the public copy", async () => {
   const { manager, supervisor, spaceId, routeId } = await deletionFixture("unpublish");
   currentTime = Date.now();
-  const publish = (id) => service.publishRoute({ idToken: manager.token, spaceId, routeId: id, name: "Shared loop", area: "Augusta" });
+  const publish = (id) => service.publishRoute({ idToken: manager.token, spaceId, routeId: id, name: "Shared loop", area: "Augusta", confirmPrivacy: "yes" });
   const first = (await publish(routeId)).publicRouteId;
   await assert.rejects(service.unpublishRoute({ idToken: supervisor.token, spaceId, routeId }), /Not authorized/);
   assert.deepEqual(await service.unpublishRoute({ idToken: manager.token, spaceId, routeId }), { unpublished: true });
@@ -627,4 +630,24 @@ test("unpublishing, deleting the route or deleting the space removes the public 
   await service.deleteSpace({ idToken: manager.token, spaceId, confirmName: "Deletion learner" });
   assert.equal((await db.doc(`publicRoutes/${third}`).get()).exists, false);
   assert.equal((await db.doc(`publicRouteSources/${third}`).get()).exists, false);
+});
+
+test("published lines stay clear of the start, the end, loops back home and marked private places, which are not stored", async () => {
+  const { manager, supervisor, spaceId } = await deletionFixture("privacy");
+  currentTime = Date.now();
+  const home = { lat: 33.47, lng: -82.01 }, school = { lat: 33.478, lng: -82.01 };
+  // A loop: 2 km north past the school, across, and back south to home.
+  const loop = [home, { lat: 33.488, lng: -82.01 }, { lat: 33.488, lng: -81.998 }, { lat: 33.47, lng: -81.998 }, home];
+  const routeId = randomUUID();
+  await service.createRoute({ idToken: supervisor.token, spaceId, operationId: routeId, name: "Loop", start: "A", destination: "B", geometry, roadPolyline: encodeRoutePolyline(loop) });
+  const places = JSON.stringify([school]);
+  const { publicRouteId } = await service.publishRoute({ idToken: manager.token, spaceId, routeId, name: "Neighbourhood loop", area: "Augusta", confirmPrivacy: "yes", privatePlaces: places });
+  const item = (await db.doc(`publicRoutes/${publicRouteId}`).get()).data();
+  const shared = decodeRoutePolyline(item.line);
+  const nearest = (place) => Math.min(...shared.map((p) => { const dLat = (p.lat - place.lat) * 111195, dLng = (p.lng - place.lng) * 111195 * Math.cos(place.lat * Math.PI / 180); return Math.hypot(dLat, dLng); }));
+  assert.ok(nearest(home) > 395, `home kept clear (${nearest(home)} m)`);
+  assert.ok(nearest(school) > 395, `school kept clear (${nearest(school)} m)`);
+  assert.equal(JSON.stringify(item).includes("33.478,"), false);
+  assert.equal(JSON.stringify((await db.doc(`publicRouteSources/${publicRouteId}`).get()).data()).includes("33.478"), false, "private places are not stored");
+  assert.equal(Object.hasOwn((await db.doc(`spaces/${spaceId}/routes/${routeId}`).get()).data(), "privatePlaces"), false);
 });

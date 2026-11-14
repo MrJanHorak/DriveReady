@@ -23,7 +23,7 @@ export const ROUTES = Object.freeze({
   "/v1/account/delete": { action: "deleteAccount", fields: ["confirmEmail"] },
   "/v1/routes/review": { action: "reviewRoute", fields: ["spaceId", "routeId", "decision"], optional: ["reason"] },
   "/v1/drives/reflection": { action: "setReflection", fields: ["spaceId", "driveId", "reflection"] },
-  "/v1/public/publish": { action: "publishRoute", fields: ["spaceId", "routeId", "name", "area"], optional: ["description", "practicedSkills", "practicedConditions"] },
+  "/v1/public/publish": { action: "publishRoute", fields: ["spaceId", "routeId", "name", "area", "confirmPrivacy"], optional: ["description", "practicedSkills", "practicedConditions", "privatePlaces"] },
   "/v1/public/unpublish": { action: "unpublishRoute", fields: ["spaceId", "routeId"] },
   "/v1/public/report": { action: "reportPublicRoute", fields: ["publicRouteId", "reason"], optional: ["note"] },
   "/v1/public/save": { action: "savePublicRoute", fields: ["publicRouteId", "spaceId", "operationId"] },
