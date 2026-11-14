@@ -81,7 +81,9 @@ test("gateway verifies accounts and invitation scope before granting access", as
   const drive = { spaceId, operationId: randomUUID(), date: "2026-10-30", minutes: "45", nightMinutes: "10", notes: "Synthetic notes", supervisorPresentUid: manager.uid, routeId: (await route.json()).routeId };
   assert.equal((await post("/v1/drives", learner.token, drive)).status, 403);
   assert.equal((await post("/v1/drives", manager.token, { ...drive, recordedByUid: learner.uid })).status, 400);
-  assert.equal((await post("/v1/drives", manager.token, { ...drive, routeId: "" })).status, 403);
+  const noRoute = await post("/v1/drives", manager.token, { ...drive, routeId: "" });
+  assert.equal(noRoute.status, 422);
+  assert.deepEqual(await noRoute.json(), { error: "Choose a saved route before recording a drive." });
   assert.equal((await getDocFromServer(doc(manager.db, `spaces/${spaceId}/drives/${drive.operationId}`))).exists(), false);
   assert.equal((await post("/v1/drives", manager.token, drive)).status, 200);
   assert.equal((await getDocFromServer(doc(learner.db, `spaces/${spaceId}/drives/${drive.operationId}`))).data().recordedByUid, manager.uid);

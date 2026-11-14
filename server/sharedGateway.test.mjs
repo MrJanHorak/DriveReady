@@ -7,7 +7,7 @@ const origin = "https://driveready.example.app";
 
 async function withServer(options, run) {
   const calls = [];
-  const service = { createSpace: async (input) => { calls.push(input); return { spaceId: "space-1" }; }, removeMember: async () => { throw new Error("secret detail"); } };
+  const service = { createSpace: async (input) => { calls.push(input); return { spaceId: "space-1" }; }, removeMember: async () => { throw new Error("secret detail"); }, leaveSpace: async () => { throw Object.assign(new Error("Delete the learner spaces you manage first."), { rejected: true }); } };
   const logs = [];
   const server = createServer(createSharedGateway({ service, allowedOrigins: [origin], log: (entry) => logs.push(entry), ...options }));
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -43,6 +43,9 @@ test("other origins, methods, paths, bodies and missing tokens are refused witho
     const failed = await post(base, "/v1/members/remove", { spaceId: "s", memberUid: "m" });
     assert.equal(failed.status, 403);
     assert.doesNotMatch(await failed.text(), /secret/);
+    const refused = await post(base, "/v1/spaces/leave", { spaceId: "s" });
+    assert.equal(refused.status, 422);
+    assert.deepEqual(await refused.json(), { error: "Delete the learner spaces you manage first." }, "a refusal that changed nothing explains itself");
   });
 });
 

@@ -542,17 +542,11 @@ test("managers publish approved routes without anything that identifies the fami
   await assert.rejects(publish(manager, { name: "Two\nlines" }), /Invalid public route/);
   await assert.rejects(publish(manager, { area: "" }), /Invalid public route/);
   await assert.rejects(publish(manager, { confirmPrivacy: "no" }), /Confirm that/);
-  await assert.rejects(publish(manager, { privatePlaces: "not json" }), /Invalid private places/);
-  await assert.rejects(publish(manager, { privatePlaces: JSON.stringify(Array(6).fill({ lat: 33, lng: -82 })) }), /Invalid private places/);
 
-  // Proposed and too-short routes can't be shared.
+  // Proposed routes can't be shared.
   const proposed = randomUUID();
   await service.createRoute({ idToken: learner.token, spaceId, operationId: proposed, name: "Idea", start: "A", destination: "B", geometry, roadPolyline: testRoadPolyline });
   await assert.rejects(service.publishRoute({ idToken: manager.token, spaceId, routeId: proposed, name: "Idea", area: "Augusta", confirmPrivacy: "yes" }), /approved route/);
-  const short = randomUUID();
-  const shortLine = encodeRoutePolyline([{ lat: 33.47, lng: -82.01 }, { lat: 33.475, lng: -82.01 }]);
-  await service.createRoute({ idToken: supervisor.token, spaceId, operationId: short, name: "Short", start: "A", destination: "B", geometry, roadPolyline: shortLine });
-  await assert.rejects(service.publishRoute({ idToken: manager.token, spaceId, routeId: short, name: "Short hop", area: "Augusta", confirmPrivacy: "yes" }), /Too little of this route/);
 
   const { publicRouteId, created } = await publish(manager);
   assert.equal(created, true);
@@ -562,8 +556,9 @@ test("managers publish approved routes without anything that identifies the fami
   assert.equal(item.name, "Riverside practice loop");
   assert.deepEqual(item.practicedSkills, ["Turns"]);
   const original = decodeRoutePolyline(testRoadPolyline), shared = decodeRoutePolyline(item.line);
-  assert.notDeepEqual(shared[0], original[0], "the start is trimmed");
-  assert.notDeepEqual(shared.at(-1), original.at(-1), "the end is trimmed");
+  assert.deepEqual([shared[0], shared.at(-1)], [original[0], original.at(-1)], "the whole route is shared, start and end included");
+  const source = (await db.doc(`spaces/${spaceId}/routes/${routeId}`).get()).data();
+  assert.deepEqual(source.suggestedSkills, ["Turns"], "the family's own route keeps the skills for its drive form");
   assert.equal(JSON.stringify(item).includes(spaceId), false);
   assert.equal(JSON.stringify(item).includes("Deletion learner"), false);
   assert.equal((await db.doc(`publicRouteSources/${publicRouteId}`).get()).data().spaceId, spaceId);
@@ -579,6 +574,8 @@ test("managers publish approved routes without anything that identifies the fami
   const copy = (await db.doc(`spaces/${otherSpace}/routes/${operationId}`).get()).data();
   assert.equal(copy.status, "approved");
   assert.equal(copy.roadPolyline, item.line);
+  assert.deepEqual(copy.suggestedSkills, ["Turns"], "saved copies suggest the route's skills");
+  assert.deepEqual(copy.suggestedConditions, []);
   assert.ok(copy.geometry.length >= 2 && copy.geometry.length <= 50);
   assert.equal((await service.createDrive({ idToken: other.token, spaceId: otherSpace, operationId: randomUUID(), date: "2026-11-03", minutes: "25", nightMinutes: "0", notes: "", supervisorPresentUid: other.uid, routeId: operationId })).created, true);
 
@@ -632,25 +629,6 @@ test("unpublishing, deleting the route or deleting the space removes the public 
   assert.equal((await db.doc(`publicRouteSources/${third}`).get()).exists, false);
 });
 
-test("published lines stay clear of the start, the end, loops back home and marked private places, which are not stored", async () => {
-  const { manager, supervisor, spaceId } = await deletionFixture("privacy");
-  currentTime = Date.now();
-  const home = { lat: 33.47, lng: -82.01 }, school = { lat: 33.478, lng: -82.01 };
-  // A loop: 2 km north past the school, across, and back south to home.
-  const loop = [home, { lat: 33.488, lng: -82.01 }, { lat: 33.488, lng: -81.998 }, { lat: 33.47, lng: -81.998 }, home];
-  const routeId = randomUUID();
-  await service.createRoute({ idToken: supervisor.token, spaceId, operationId: routeId, name: "Loop", start: "A", destination: "B", geometry, roadPolyline: encodeRoutePolyline(loop) });
-  const places = JSON.stringify([school]);
-  const { publicRouteId } = await service.publishRoute({ idToken: manager.token, spaceId, routeId, name: "Neighbourhood loop", area: "Augusta", confirmPrivacy: "yes", privatePlaces: places });
-  const item = (await db.doc(`publicRoutes/${publicRouteId}`).get()).data();
-  const shared = decodeRoutePolyline(item.line);
-  const nearest = (place) => Math.min(...shared.map((p) => { const dLat = (p.lat - place.lat) * 111195, dLng = (p.lng - place.lng) * 111195 * Math.cos(place.lat * Math.PI / 180); return Math.hypot(dLat, dLng); }));
-  assert.ok(nearest(home) > 395, `home kept clear (${nearest(home)} m)`);
-  assert.ok(nearest(school) > 395, `school kept clear (${nearest(school)} m)`);
-  assert.equal(JSON.stringify(item).includes("33.478,"), false);
-  assert.equal(JSON.stringify((await db.doc(`publicRouteSources/${publicRouteId}`).get()).data()).includes("33.478"), false, "private places are not stored");
-  assert.equal(Object.hasOwn((await db.doc(`spaces/${spaceId}/routes/${routeId}`).get()).data(), "privatePlaces"), false);
-});
 
 test("community totals count saves, families and drives; only families who drove a route can rate it or leave a tip", async () => {
   const { manager, supervisor, learner, outsider, spaceId, routeId } = await deletionFixture("reviews");
@@ -719,4 +697,11 @@ test("community totals count saves, families and drives; only families who drove
   assert.equal((await db.collection(`publicRoutes/${publicRouteId}/tips`).get()).size, 0);
   assert.equal((await stats()).tipReportCount, 0);
   assert.deepEqual(await service.setRouteTip({ idToken: learner.token, publicRouteId, text: "" }), { saved: false, removed: false });
+});
+
+test("refusals that change nothing say why; permission failures stay generic", async () => {
+  const { manager, outsider, spaceId, routeId } = await deletionFixture("rejections");
+  currentTime = Date.now();
+  await assert.rejects(service.publishRoute({ idToken: manager.token, spaceId, routeId, name: "Loop", area: "Augusta", confirmPrivacy: "no" }), (error) => error.rejected === true && /doesn't start, end or pass/.test(error.message));
+  await assert.rejects(service.publishRoute({ idToken: outsider.token, spaceId, routeId, name: "Loop", area: "Augusta", confirmPrivacy: "yes" }), (error) => error.rejected !== true && error.message === "Not authorized.");
 });

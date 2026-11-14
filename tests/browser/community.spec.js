@@ -47,16 +47,10 @@ test("a manager shares a route, another family saves and reports it, and a moder
     await item.getByRole("button", { name: "Share with the community…" }).click();
     const form = item.getByRole("form", { name: "Share with the community" });
     await expect(form).toContainText("Secret Learner Name’s name and the start and destination descriptions are left out");
-    // Mark a private place on the preview map; the shareable length drops and the form must be re-confirmed.
-    const preview = page.getByRole("region", { name: "Sharing preview map" });
-    await expect(preview).toBeVisible();
-    const before = await form.getByText("will be shared", { exact: false }).textContent();
-    const box = await preview.boundingBox();
-    await preview.click({ position: { x: box.width / 2, y: box.height / 2 } });
-    await expect(form.getByText("Private place 1")).toBeVisible();
-    await expect(form.getByText("will be shared", { exact: false })).not.toHaveText(before);
+    await expect(page.getByRole("heading", { name: "Sharing preview" })).toBeVisible();
+    await expect(form).toContainText("The whole line is shared, including where it starts and ends.");
     await expect(form.getByRole("button", { name: "Share publicly" })).toBeDisabled();
-    await form.getByLabel("I’ve checked the preview", { exact: false }).check();
+    await form.getByLabel("I’ve checked the map", { exact: false }).check();
     await form.getByLabel("Public name").fill("Lakeside loop with four-way stops");
     await form.getByLabel("General area").fill("Evans");
     await form.getByLabel("What’s it good for?", { exact: false }).fill("Quiet residential streets, then a busier road.");
@@ -93,7 +87,12 @@ test("a manager shares a route, another family saves and reports it, and a moder
     // Family B drives it, then rates it and leaves a tip.
     await nav(saverPage, "Driving Logs");
     await saverPage.getByRole("button", { name: "Log a drive", exact: true }).click();
-    await saverPage.getByLabel("Choose a saved route").selectOption(saved[0].id);
+    const routeChoice = saverPage.getByLabel("Choose a saved route");
+    await expect(routeChoice.locator('optgroup[label="Saved from the community"] option')).toHaveText([/Lakeside loop with four-way stops/]);
+    await routeChoice.selectOption(saved[0].id);
+    await expect(saverPage.getByText("Skills and conditions filled in from this route.", { exact: false })).toBeVisible();
+    await expect(saverPage.getByLabel("Turns")).toBeChecked();
+    await expect(saverPage.getByLabel("Residential roads")).toBeChecked();
     await saverPage.getByLabel("Practice date").fill("2026-11-10");
     await saverPage.getByLabel("Total minutes").fill("30");
     await saverPage.getByRole("button", { name: "Save shared practice" }).click();

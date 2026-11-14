@@ -43,6 +43,12 @@ export async function sharedAccessRequest(uid, action, body) {
     method: "POST", headers: { Authorization: `Bearer ${idToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(body), credentials: "omit", cache: "no-store", redirect: "error",
   });
+  // 422: the service refused before changing anything and says why.
+  if (response.status === 422) {
+    let reason = "";
+    try { reason = (await response.json()).error ?? ""; } catch { /* no reason given */ }
+    throw Object.assign(new Error(typeof reason === "string" && reason ? reason : "The request was refused."), { rejected: true });
+  }
   if (!response.ok) throw new Error("Request could not be confirmed.");
   return response.json();
 }

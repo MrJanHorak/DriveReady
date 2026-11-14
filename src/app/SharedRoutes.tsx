@@ -6,8 +6,6 @@ import { decodeRoutePolyline } from "./routePolyline";
 import { followRoads } from "./followRoads";
 import { routeStatus } from "./routeStatus";
 import { PracticeChoices } from "./PracticeChoices";
-import PrivacyPreviewMap from "./PrivacyPreviewMap";
-import { MAX_PRIVATE_PLACES, MIN_PRIVACY_RADIUS_M, MAX_PRIVACY_RADIUS_M, lineLengthM, publicLine } from "./publicLine";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
 import { ChevronDown, Globe2, Map as MapIcon, Navigation, Plus, RefreshCw } from "lucide-react";
 import { Badge, Card, CardHeader, RouteSketch, dangerButton, ghostButton, heading, mono, primaryButton } from "./design";
@@ -95,7 +93,7 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
   const isManager = space?.role === "manager";
   const awaiting = routes.filter((route) => routeStatus(route) === "proposed");
   const [reasons, setReasons] = useState<Record<string, string>>({});
-  const [sharing, setSharing] = useState<{ routeId: string; name: string; area: string; description: string; skills: string[]; conditions: string[]; places: RoutePoint[]; confirmed: boolean } | null>(null);
+  const [sharing, setSharing] = useState<{ routeId: string; name: string; area: string; description: string; skills: string[]; conditions: string[]; confirmed: boolean } | null>(null);
   function changePoints(update: (existing: RoutePoint[]) => RoutePoint[], announce = true) {
     routeRequestVersion.current += 1; routeRequest.current?.abort(); routeRequest.current = null;
     setRouting(false); setRoadPolyline(""); setRoutingMessage(announce && (roadPolyline || routing) ? "Points changed. Find roads again before saving." : ""); setPoints(update);
@@ -156,7 +154,7 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
     const form = sharing;
     setMessage("");
     void run(async () => {
-      await sharedAccessRequest(uid, "publishRoute", { spaceId: selected, routeId: route.id, name: form.name.trim(), area: form.area.trim(), description: form.description.trim(), practicedSkills: JSON.stringify(form.skills), practicedConditions: JSON.stringify(form.conditions), privatePlaces: JSON.stringify(form.places), confirmPrivacy: form.confirmed ? "yes" : "no" });
+      await sharedAccessRequest(uid, "publishRoute", { spaceId: selected, routeId: route.id, name: form.name.trim(), area: form.area.trim(), description: form.description.trim(), practicedSkills: JSON.stringify(form.skills), practicedConditions: JSON.stringify(form.conditions), confirmPrivacy: form.confirmed ? "yes" : "no" });
       if (!alive.current) return;
       setSharing(null);
       await refresh();
@@ -177,8 +175,6 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
   const activePath = useMemo(() => { try { return activeRoute?.roadPolyline ? decodeRoutePolyline(activeRoute.roadPolyline) : undefined; } catch { return undefined; } }, [activeRoute?.roadPolyline]);
   const activePoints = Array.isArray(activeRoute?.geometry) && activeRoute.geometry.length >= 2 ? activeRoute.geometry : null;
   const previewing = !!sharing && sharing.routeId === activeRoute?.id && !!activePath;
-  // The preview uses the smallest privacy circle, so it shows the most that could be shared.
-  const preview = useMemo(() => previewing && activePath ? publicLine(activePath, sharing!.places, MIN_PRIVACY_RADIUS_M) : null, [previewing, activePath, sharing?.places]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!spaces.length && !pending) return null;
   return <section className="space-y-5 text-sm" aria-label={sharedAccessDemo ? "Shared routes · local emulator" : "Shared routes"}>
     <h4 className="sr-only">{sharedAccessDemo ? "Shared routes · local emulator" : "Shared routes"}</h4>
@@ -219,23 +215,21 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
                 : sharing?.routeId === route.id
                   ? <form className="space-y-3 rounded-xl border border-[#0C7A8D]/30 bg-[#F4FAFB] p-3" aria-label="Share with the community" onSubmit={(event) => { event.preventDefault(); publish(route); }}>
                     <p className="text-sm font-bold" style={heading}>Share with the community</p>
-                    <ul className="list-disc space-y-0.5 pl-4 text-muted-foreground"><li>Any signed-in DriveReady family can see and save it.</li><li>{space?.learnerName}’s name and the start and destination descriptions are left out, and so is every part of the line near the start, the end or a private place you mark.</li><li>You can stop sharing at any time.</li></ul>
+                    <ul className="list-disc space-y-0.5 pl-4 text-muted-foreground"><li>Any signed-in DriveReady family can see and save it.</li><li>{space?.learnerName}’s name and the start and destination descriptions are left out.</li><li>You can stop sharing at any time.</li></ul>
                     <label className="block font-medium">Public name<input className={`${field} mt-1`} maxLength={80} required value={sharing.name} onChange={(event) => setSharing({ ...sharing, name: event.target.value })} /></label>
                     <p className="-mt-2 text-[11px] text-muted-foreground">Avoid names like “Home to school”; describe the roads instead.</p>
                     <label className="block font-medium">General area<input className={`${field} mt-1`} maxLength={60} required placeholder="e.g. North Augusta" value={sharing.area} onChange={(event) => setSharing({ ...sharing, area: event.target.value })} /></label>
                     <label className="block font-medium">What’s it good for? <span className="font-normal text-muted-foreground">(optional)</span><textarea className={`${field} mt-1 min-h-16`} maxLength={300} value={sharing.description} onChange={(event) => setSharing({ ...sharing, description: event.target.value })} /></label>
-                    <fieldset className="space-y-2 rounded-lg border border-red-200 bg-white p-3" aria-label="Private places">
-                      <legend className="px-1 text-sm font-semibold text-red-800">Keep private places off the map</legend>
-                      <p className="text-muted-foreground">Nothing within {MIN_PRIVACY_RADIUS_M}–{MAX_PRIVACY_RADIUS_M} m of the start, the end, or a place you mark is shared, even if the route loops back past it. Tap the route map to mark your home, school or work (up to {MAX_PRIVATE_PLACES}). Marks are used only to cut the line and are never saved.</p>
-                      {sharing.places.length > 0 && <ul className="space-y-1">{sharing.places.map((place, index) => <li key={`${place.lat},${place.lng},${index}`} className="flex items-center gap-2"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-700 text-[10px] font-bold text-white">{index + 1}</span><span className="flex-1">Private place {index + 1}</span><button type="button" className="text-xs text-red-800 underline" onClick={() => setSharing({ ...sharing, places: sharing.places.filter((_, i) => i !== index), confirmed: false })}>Remove</button></li>)}</ul>}
-                      <p role="status" className={preview ? "text-[#095969]" : "font-medium text-red-800"}>{preview ? `At most about ${(lineLengthM(preview) / 1000).toFixed(1)} km will be shared (the teal line).` : "Too little of this route is far enough from its start, end and private places to share."}</p>
-                    </fieldset>
+                    <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-amber-950" aria-label="Before you share">
+                      <p className="font-semibold">Check the map before sharing</p>
+                      <ul className="list-disc space-y-0.5 pl-4"><li>The whole line is shared, including where it starts and ends.</li><li>Share routes that start and end at a public place, such as a parking lot, park or store, not at home.</li><li>Make sure it doesn’t pass your home or school on a quiet street. If it does, draw a new route for sharing.</li></ul>
+                    </div>
                     <PracticeChoices compact legend="Skills" choices={PRACTICE_SKILLS} selected={sharing.skills} onChange={(skills) => setSharing({ ...sharing, skills })} />
                     <PracticeChoices compact legend="Conditions" choices={PRACTICE_CONDITIONS} selected={sharing.conditions} onChange={(conditions) => setSharing({ ...sharing, conditions })} />
-                    <label className="flex items-start gap-2 rounded-lg bg-amber-50 p-2 text-amber-950"><input type="checkbox" className="mt-0.5 accent-[#0C7A8D]" checked={sharing.confirmed} onChange={(event) => setSharing({ ...sharing, confirmed: event.target.checked })} /><span>I’ve checked the preview: the teal line doesn’t show our home, school or any other private place.</span></label>
-                    <div className="flex flex-wrap gap-2"><button className={primaryButton} disabled={blocked || !!pending || !sharing.confirmed || !preview}><Globe2 size={14} aria-hidden="true" />Share publicly</button><button type="button" className={ghostButton} onClick={() => setSharing(null)}>Cancel</button></div>
+                    <label className="flex items-start gap-2 rounded-lg bg-amber-50 p-2 text-amber-950"><input type="checkbox" className="mt-0.5 accent-[#0C7A8D]" checked={sharing.confirmed} onChange={(event) => setSharing({ ...sharing, confirmed: event.target.checked })} /><span>I’ve checked the map: this route doesn’t start, end or pass at our home, school or another private place.</span></label>
+                    <div className="flex flex-wrap gap-2"><button className={primaryButton} disabled={blocked || !!pending || !sharing.confirmed}><Globe2 size={14} aria-hidden="true" />Share publicly</button><button type="button" className={ghostButton} onClick={() => setSharing(null)}>Cancel</button></div>
                   </form>
-                  : <button type="button" className={ghostButton} disabled={blocked || !!pending} onClick={() => { setActiveId(route.id); setSharing({ routeId: route.id, name: route.name, area: "", description: "", skills: [], conditions: [], places: [], confirmed: false }); }}><Globe2 size={13} aria-hidden="true" />Share with the community…</button>)}
+                  : <button type="button" className={ghostButton} disabled={blocked || !!pending} onClick={() => { setActiveId(route.id); setSharing({ routeId: route.id, name: route.name, area: "", description: "", skills: [], conditions: [], confirmed: false }); }}><Globe2 size={13} aria-hidden="true" />Share with the community…</button>)}
               {(space?.role === "manager" || route.createdByUid === uid) && <button type="button" className={`${dangerButton} mt-1`} disabled={blocked || !!pending} onClick={() => removeRoute(route)}>Delete route</button>}
             </div>
           </details></li>;
@@ -244,11 +238,10 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
       </Card>
 
       <Card className="flex min-w-0 flex-col overflow-hidden" aria-label="Selected route">
-        <CardHeader divided title={previewing ? "Sharing preview" : activeRoute ? activeRoute.name : "Route map"} subtitle={previewing ? "What other families would see. Tap the map to mark a private place." : activeRoute ? `${activeRoute.start} → ${activeRoute.destination}` : "Select a saved route to see it here"} action={previewing ? <Badge>Not shared yet</Badge> : activeRoute?.roadPolyline ? <Badge>Follows roads</Badge> : undefined} />
+        <CardHeader divided title={previewing ? "Sharing preview" : activeRoute ? activeRoute.name : "Route map"} subtitle={previewing ? "Other families would see this whole line, start and end included." : activeRoute ? `${activeRoute.start} → ${activeRoute.destination}` : "Select a saved route to see it here"} action={previewing ? <Badge>Not shared yet</Badge> : activeRoute?.roadPolyline ? <Badge>Follows roads</Badge> : undefined} />
         <div className="relative flex-1 p-3">
-          {activePage && previewing && activePath ? <PrivacyPreviewMap route={activePath} shared={preview} places={sharing!.places} label="Sharing preview map" onAddPlace={(place) => setSharing((current) => current && current.places.length < MAX_PRIVATE_PLACES ? { ...current, places: [...current.places, place], confirmed: false } : current)} />
-          : activePage && activePoints ? <RouteMap browse points={activePoints} path={activePath} heightClass="h-72 lg:h-[460px]" label={`${activeRoute!.name} on the map`} /> : <div className="flex h-72 flex-col items-center justify-center gap-2 rounded-xl bg-[#E4EFF2] text-[#0C7A8D] lg:h-[460px]"><MapIcon size={28} aria-hidden="true" /><span className="text-xs">{activeRoute ? "This older route has no map points." : "No route selected"}</span></div>}
-          {activePoints && !previewing && <div className="pointer-events-none absolute bottom-6 left-6 z-[500] rounded-xl border border-border bg-card/95 px-3 py-2 text-[11px] shadow-sm" style={mono}><span className="mr-3 inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#138f69]" />Start</span><span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#df8250]" />Destination</span></div>}
+          {activePage && activePoints ? <RouteMap browse points={activePoints} path={activePath} heightClass="h-72 lg:h-[460px]" label={`${activeRoute!.name} on the map`} /> : <div className="flex h-72 flex-col items-center justify-center gap-2 rounded-xl bg-[#E4EFF2] text-[#0C7A8D] lg:h-[460px]"><MapIcon size={28} aria-hidden="true" /><span className="text-xs">{activeRoute ? "This older route has no map points." : "No route selected"}</span></div>}
+          {activePoints && <div className="pointer-events-none absolute bottom-6 left-6 z-[500] rounded-xl border border-border bg-card/95 px-3 py-2 text-[11px] shadow-sm" style={mono}><span className="mr-3 inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#138f69]" />Start</span><span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#df8250]" />Destination</span></div>}
         </div>
       </Card>
     </div>

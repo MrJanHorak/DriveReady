@@ -6,7 +6,7 @@ import { DIFFICULTY, communityRating } from "./communityStats";
 import RouteMap from "./RouteMap";
 import { decodeRoutePolyline } from "./routePolyline";
 import { PRACTICE_SKILLS } from "./practiceData";
-import { Badge, Card, CardHeader, RouteSketch, SkillTag, dangerButton, ghostButton, heading, mono, primaryButton } from "./design";
+import { Card, CardHeader, RouteSketch, SkillTag, dangerButton, ghostButton, heading, mono, primaryButton } from "./design";
 
 type Space = { id: string; learnerName: string; role: string };
 type PublicRoute = { id: string; name: string; description?: string; area: string; lengthKm?: number; line: string; practicedSkills?: string[]; practicedConditions?: string[]; saveCount?: number; practicedCount?: number; driveCount?: number; ratingCount?: number; starsTotal?: number; difficultyTotal?: number };
@@ -190,7 +190,7 @@ export default function CommunityRoutes({ uid, spaces, blocked, run, active, onS
 
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3 bg-gradient-to-r from-[#0C7A8D] to-[#12B5C9] px-5 py-5 text-white">
-        <div className="min-w-0"><p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-white/80" style={mono}><Globe2 size={13} aria-hidden="true" />Community library</p><h2 className="mt-1 text-xl font-bold" style={heading}>Practice routes shared by DriveReady families</h2><p className="mt-1 max-w-2xl text-sm text-white/85">Managing supervisors share routes their learners practised. Names are never included, and nothing within 400–600 m of a route’s start, end or any place the family marked private is shown.</p></div>
+        <div className="min-w-0"><p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-white/80" style={mono}><Globe2 size={13} aria-hidden="true" />Community library</p><h2 className="mt-1 text-xl font-bold" style={heading}>Practice routes shared by DriveReady families</h2><p className="mt-1 max-w-2xl text-sm text-white/85">Managing supervisors share routes their learners practised. Learner names and family details are never included. Families share routes that start and end at public places.</p></div>
         <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-white/40 bg-white/10 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/20 disabled:opacity-50" disabled={blocked || state === "loading"} onClick={() => void refresh()}><RefreshCw size={13} aria-hidden="true" /> Refresh</button>
       </div>
       <div className="flex flex-wrap items-center gap-2 px-5 py-3" role="group" aria-label="Filter by skill">
@@ -222,7 +222,7 @@ export default function CommunityRoutes({ uid, spaces, blocked, run, active, onS
       </Card>
 
       <Card className="flex min-w-0 flex-col overflow-hidden" aria-label="Selected community route">
-        <CardHeader divided title={selected ? selected.name : "Route map"} subtitle={selected ? `${selected.area}${selected.lengthKm ? ` · ${selected.lengthKm} km shown` : ""}` : "Select a shared route to see it here"} action={selected ? <Badge>Privacy-trimmed</Badge> : undefined} />
+        <CardHeader divided title={selected ? selected.name : "Route map"} subtitle={selected ? `${selected.area}${selected.lengthKm ? ` · ${selected.lengthKm} km` : ""}` : "Select a shared route to see it here"}  />
         <div className="p-3">
           {active && path.length >= 2 ? <RouteMap browse points={[path[0], path[path.length - 1]]} path={path} heightClass="h-72 lg:h-[400px]" label={`${selected!.name} on the map`} /> : <div className="flex h-72 flex-col items-center justify-center gap-2 rounded-xl bg-[#E4EFF2] text-[#0C7A8D] lg:h-[400px]"><MapIcon size={28} aria-hidden="true" /><span className="text-xs">No route selected</span></div>}
         </div>
@@ -237,7 +237,7 @@ export default function CommunityRoutes({ uid, spaces, blocked, run, active, onS
             <div className="mt-2"><DifficultyMeter value={rating?.difficulty ?? 0} /></div>
             <p className="mt-1.5 text-xs text-muted-foreground">{rating?.count ? `${rating.level?.hint}. From ${plural(rating.count, "rating", "ratings")}${rating.count < 3 ? "; an early estimate that settles as more families rate it" : ""}.` : "Families who drive this route rate how hard it felt; the average becomes its difficulty."}</p>
           </div>
-          <p className="text-xs text-muted-foreground">Parts near where the family started, finished or marked private are left out, so the line may begin and end mid-street. Check it yourself before practising; it is not turn-by-turn navigation.</p>
+          <p className="text-xs text-muted-foreground">Check the route yourself before practising; it is not turn-by-turn navigation.</p>
           {savable.length > 0 ? <div className="flex flex-wrap items-end gap-2">
             <label className="min-w-0 basis-full text-sm font-medium sm:basis-auto">Save to<select className={`${field} mt-1 sm:w-56`} value={target} disabled={blocked} onChange={(event) => setTarget(event.target.value)}>{savable.map((space) => <option key={space.id} value={space.id}>{space.learnerName}</option>)}</select></label>
             <button type="button" className={primaryButton} disabled={blocked || !targetSpace} onClick={save}><Bookmark size={15} aria-hidden="true" />Save to learner’s routes</button>

@@ -15,7 +15,7 @@ import { loadTimer, saveTimer } from "./timerState";
 import { routeStatus } from "./routeStatus";
 
 type Space = { id: string; learnerName: string; role: string };
-type Route = { id: string; name: string; start: string; destination: string; geometry?: RoutePoint[]; status?: string };
+type Route = { id: string; name: string; start: string; destination: string; geometry?: RoutePoint[]; status?: string; publicRouteId?: string; sourcePublicRouteId?: string; suggestedSkills?: string[]; suggestedConditions?: string[] };
 type Drive = { id: string; date: string; minutes: number; nightMinutes: number; notes: string; learnerReflection?: string; recordedByUid: string; lastEditedByUid?: string; supervisorPresentUid: string; revision?: number; routeId?: string; practicedSkills?: string[]; practicedConditions?: string[]; routeSnapshot?: { name: string; start: string; destination: string; geometry?: RoutePoint[]; roadPolyline?: string } };
 type CreateBody = { spaceId: string; operationId: string; date: string; minutes: string; nightMinutes: string; notes: string; supervisorPresentUid: string; routeId: string; practicedSkills: string; practicedConditions: string };
 type EditBody = { spaceId: string; driveId: string; operationId: string; expectedRevision: string; date: string; minutes: string; nightMinutes: string; notes: string; practicedSkills: string; practicedConditions: string };
@@ -215,6 +215,19 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
   const space = spaces.find((item) => item.id === selected);
   const canRecord = space && ["manager", "supervisor"].includes(space.role);
   const isLearner = space?.role === "learner";
+  const [suggestionNote, setSuggestionNote] = useState("");
+  // Routes shared with or saved from the community carry suggested skills and
+  // conditions; fill them in when the form has none ticked yet.
+  function chooseRoute(id: string) {
+    setRouteId(id); setRouteNotice(""); setSuggestionNote("");
+    const route = routes.find((item) => item.id === id);
+    const suggestedSkills = route?.suggestedSkills ?? [], suggestedConditions = route?.suggestedConditions ?? [];
+    if ((suggestedSkills.length || suggestedConditions.length) && !skills.length && !conditions.length) {
+      setSkills(suggestedSkills.filter((item) => PRACTICE_SKILLS.includes(item)));
+      setConditions(suggestedConditions.filter((item) => PRACTICE_CONDITIONS.includes(item)));
+      setSuggestionNote("Skills and conditions filled in from this route. Untick anything you didn’t practise.");
+    }
+  }
   function saveReflection(drive: Drive) {
     const text = reflectionText.trim();
     void run(async () => {
@@ -244,7 +257,7 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
   useEffect(() => {
     if (nightSuggestion && !nightTouched && !pending && String(nightSuggestion.minutes) !== nightMinutes) setNightMinutes(String(nightSuggestion.minutes));
   }, [nightSuggestion?.minutes, nightTouched, pending]); // eslint-disable-line react-hooks/exhaustive-deps
-  function resetForm() { timerSource.current = null; setStartTime(""); setNightTouched(false); setEditing(null); setFormOpen(false); setDate(""); setMinutes(""); setNightMinutes("0"); setNotes(""); setRouteId(""); setSkills([]); setConditions([]); }
+  function resetForm() { setSuggestionNote(""); timerSource.current = null; setStartTime(""); setNightTouched(false); setEditing(null); setFormOpen(false); setDate(""); setMinutes(""); setNightMinutes("0"); setNotes(""); setRouteId(""); setSkills([]); setConditions([]); }
   function startEdit(drive: Drive) {
     if (blocked || pending || !canRecord) return;
     if ((date || minutes || notes || routeId || skills.length || conditions.length) && !window.confirm("Replace the current unsaved practice form?")) return;
@@ -282,7 +295,7 @@ export default function SharedPractice({ uid, spaces, blocked, run, createdRoute
     {canRecord && formOpen && <form ref={formRef} className="mt-4 grid scroll-mt-4 gap-4 rounded-2xl border border-[#0C7A8D]/25 bg-card p-5 shadow-sm sm:grid-cols-2" onSubmit={submit}>
       <h5 className="text-base font-bold sm:col-span-2" style={heading}>{editing ? "Edit practice" : "Log a drive"}{space ? ` · ${space.learnerName}` : ""}</h5>
       {editing ? <p className="font-semibold sm:col-span-2">Editing practice from {editing.date}. The recorded route and reported supervisor stay the same.</p> : <p className="text-xs text-muted-foreground sm:col-span-2">You are recorded as the supervisor present. This is self-reported, not independently verified.</p>}
-      {!editing && <div className="sm:col-span-2"><label className="text-sm font-medium">Choose a saved route<select ref={routeSelect} className={`${field} mt-1`} value={routeId} required disabled={blocked || !!pending} onChange={(event) => { setRouteId(event.target.value); setRouteNotice(""); }}><option value="">Select a mapped route</option>{routes.map((route) => { const status = routeStatus(route); return <option key={route.id} value={route.id} disabled={!Array.isArray(route.geometry) || route.geometry.length < 2 || status !== "approved"}>{route.name} · {route.start} → {route.destination}{!route.geometry ? " (no map)" : status === "proposed" ? " (awaiting approval)" : status === "declined" ? " (not approved)" : ""}</option>; })}</select></label>{routes.some((route) => !Array.isArray(route.geometry) || route.geometry.length < 2) && <p className="mt-1 text-xs text-muted-foreground">Older text-only routes can be viewed under Routes. Draw a mapped route to log a new drive.</p>}<div className="mt-1 flex flex-wrap gap-2"><button type="button" className={button} disabled={blocked || !!pending} onClick={() => onCreateRoute(selected)}>Create a route</button><button type="button" className={button} disabled={blocked || !!pending} onClick={() => void refreshRoutes()}>Refresh routes for practice</button>{routeCursor && <button type="button" className={button} disabled={blocked || !!pending || loadingRoutes} onClick={() => void loadMoreRoutes()}>{loadingRoutes ? "Loading routes…" : "Load more routes for practice"}</button>}</div>{routeNotice && <p role="status">{routeNotice}</p>}{routeError && <p role="status">Could not load routes. Refresh before choosing one.</p>}</div>}
+      {!editing && <div className="sm:col-span-2"><label className="text-sm font-medium">Choose a saved route<select ref={routeSelect} className={`${field} mt-1`} value={routeId} required disabled={blocked || !!pending} onChange={(event) => chooseRoute(event.target.value)}><option value="">Select a mapped route</option>{([["Your routes", routes.filter((route) => !route.sourcePublicRouteId)], ["Saved from the community", routes.filter((route) => route.sourcePublicRouteId)]] as [string, Route[]][]).filter(([, group]) => group.length).map(([groupLabel, group]) => <optgroup key={groupLabel} label={groupLabel}>{group.map((route) => { const status = routeStatus(route); return <option key={route.id} value={route.id} disabled={!Array.isArray(route.geometry) || route.geometry.length < 2 || status !== "approved"}>{route.name} · {route.start} → {route.destination}{route.publicRouteId ? " · shared publicly" : ""}{!route.geometry ? " (no map)" : status === "proposed" ? " (awaiting approval)" : status === "declined" ? " (not approved)" : ""}</option>; })}</optgroup>)}</select></label>{suggestionNote && <p role="status" className="mt-1 text-xs text-[#095969]">{suggestionNote}</p>}{routes.some((route) => !Array.isArray(route.geometry) || route.geometry.length < 2) && <p className="mt-1 text-xs text-muted-foreground">Older text-only routes can be viewed under Routes. Draw a mapped route to log a new drive.</p>}<div className="mt-1 flex flex-wrap gap-2"><button type="button" className={button} disabled={blocked || !!pending} onClick={() => onCreateRoute(selected)}>Create a route</button><button type="button" className={button} disabled={blocked || !!pending} onClick={() => void refreshRoutes()}>Refresh routes for practice</button>{routeCursor && <button type="button" className={button} disabled={blocked || !!pending || loadingRoutes} onClick={() => void loadMoreRoutes()}>{loadingRoutes ? "Loading routes…" : "Load more routes for practice"}</button>}</div>{routeNotice && <p role="status">{routeNotice}</p>}{routeError && <p role="status">Could not load routes. Refresh before choosing one.</p>}</div>}
       {!editing && chosenRoute && <div className="sm:col-span-2"><SharedRouteCard route={chosenRoute} /></div>}
       <label className="text-sm font-medium">Practice date<input ref={dateInput} className={`${field} mt-1`} type="date" required value={date} disabled={blocked || !!pending} onChange={(event) => setDate(event.target.value)} /></label>
       <label className="text-sm font-medium">Start time <span className="font-normal text-muted-foreground">(optional)</span><input className={`${field} mt-1`} type="time" value={startTime} disabled={blocked || !!pending} onChange={(event) => setStartTime(event.target.value)} /></label>

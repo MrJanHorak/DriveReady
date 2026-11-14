@@ -3,7 +3,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { decodeRoutePolyline, encodeRoutePolyline } from "../src/app/routePolyline.js";
-import { MAX_PRIVACY_RADIUS_M, MIN_PRIVACY_RADIUS_M, lineLengthM, publicLine, samplePoints, validPrivatePlaces } from "../src/app/publicLine.js";
+import { lineLengthM, samplePoints } from "../src/app/publicLine.js";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "../src/app/practiceData.js";
 
 const INVITATION_LIFETIME_MS = 48 * 60 * 60 * 1000;
@@ -14,6 +14,8 @@ const invitationIdPattern = /^[a-f0-9]{64}$/;
 const operationIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const unavailable = () => new Error("Invitation cannot be accepted.");
 const unauthorized = () => new Error("Not authorized.");
+// A request refused before anything changed, with a reason safe to show the person.
+const rejected = (message) => Object.assign(new Error(message), { rejected: true });
 
 function emailKey(value) {
   if (typeof value !== "string") return "";
@@ -43,16 +45,16 @@ function practiceTags(value, choices) {
   if (value === undefined || value === "") return [];
   let parsed;
   try { parsed = typeof value === "string" && value.length <= 2000 ? JSON.parse(value) : null; } catch { parsed = null; }
-  if (!Array.isArray(parsed) || parsed.length > choices.length || new Set(parsed).size !== parsed.length || !parsed.every((item) => choices.includes(item))) throw new Error("Invalid practice tags.");
+  if (!Array.isArray(parsed) || parsed.length > choices.length || new Set(parsed).size !== parsed.length || !parsed.every((item) => choices.includes(item))) throw rejected("Invalid practice tags.");
   return choices.filter((choice) => parsed.includes(choice));
 }
 function routeGeometry(value) {
   if (value === undefined || value === "") return null;
-  if (typeof value !== "string" || value.length > 3000) throw new Error("Invalid route map.");
+  if (typeof value !== "string" || value.length > 3000) throw rejected("Invalid route map.");
   let points;
-  try { points = JSON.parse(value); } catch { throw new Error("Invalid route map."); }
-  if (!Array.isArray(points) || points.length < 2 || points.length > 50 || points.some((point) => !point || typeof point !== "object" || Array.isArray(point) || Object.keys(point).sort().join(",") !== "lat,lng" || typeof point.lat !== "number" || !Number.isFinite(point.lat) || point.lat < -85 || point.lat > 85 || typeof point.lng !== "number" || !Number.isFinite(point.lng) || point.lng < -180 || point.lng > 180)) throw new Error("Invalid route map.");
-  if (points.every((point) => point.lat === points[0].lat && point.lng === points[0].lng)) throw new Error("Select at least two different map points.");
+  try { points = JSON.parse(value); } catch { throw rejected("Invalid route map."); }
+  if (!Array.isArray(points) || points.length < 2 || points.length > 50 || points.some((point) => !point || typeof point !== "object" || Array.isArray(point) || Object.keys(point).sort().join(",") !== "lat,lng" || typeof point.lat !== "number" || !Number.isFinite(point.lat) || point.lat < -85 || point.lat > 85 || typeof point.lng !== "number" || !Number.isFinite(point.lng) || point.lng < -180 || point.lng > 180)) throw rejected("Invalid route map.");
+  if (points.every((point) => point.lat === points[0].lat && point.lng === points[0].lng)) throw rejected("Select at least two different map points.");
   return points.map(({ lat, lng }) => ({ lat, lng }));
 }
 
@@ -83,7 +85,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
 
   async function createSpace({ idToken, learnerName }) {
     const caller = await identity(idToken);
-    if (typeof learnerName !== "string" || !learnerName.trim() || learnerName.trim().length > 60 || /[\r\n\u2028\u2029]/.test(learnerName)) throw new Error("Enter a learner name of up to 60 characters on one line.");
+    if (typeof learnerName !== "string" || !learnerName.trim() || learnerName.trim().length > 60 || /[\r\n\u2028\u2029]/.test(learnerName)) throw rejected("Enter a learner name of up to 60 characters on one line.");
     const space = db.collection("spaces").doc();
     const member = space.collection("members").doc(caller.uid);
     const link = db.collection("users").doc(caller.uid).collection("spaceLinks").doc(space.id);
@@ -98,7 +100,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   async function createInvitation({ idToken, spaceId, recipientEmail, role }) {
     const caller = await identity(idToken);
     const email = emailKey(recipientEmail);
-    if (!email || !["supervisor", "learner"].includes(role)) throw new Error("Enter a valid email and invitation role.");
+    if (!email || !["supervisor", "learner"].includes(role)) throw rejected("Enter a valid email and invitation role.");
     const { space, member } = refs(spaceId, caller.uid);
     const token = randomBytes(32).toString("base64url");
     const invite = space.collection("invitations").doc(invitationId(token));
@@ -219,7 +221,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
     if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || !validDate(date) ||
       typeof minutes !== "string" || !/^[1-9]\d{0,3}$/.test(minutes) || Number(minutes) > 1440 ||
       typeof nightMinutes !== "string" || !/^(0|[1-9]\d{0,3})$/.test(nightMinutes) || Number(nightMinutes) > Number(minutes) ||
-      typeof notes !== "string" || notes.length > 1000 || typeof routeId !== "string" || (routeId !== "" && !operationIdPattern.test(routeId))) throw new Error("Invalid drive details.");
+      typeof notes !== "string" || notes.length > 1000 || typeof routeId !== "string" || (routeId !== "" && !operationIdPattern.test(routeId))) throw rejected("Invalid drive details.");
     const presentUid = checkId(supervisorPresentUid);
     const skills = practiceTags(practicedSkills, PRACTICE_SKILLS), conditions = practiceTags(practicedConditions, PRACTICE_CONDITIONS);
     const { space, member } = refs(spaceId, caller.uid);
@@ -234,13 +236,13 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       if (existing.exists) {
         const saved = existing.data();
         if (!Object.entries(data).every(([key, value]) => saved[key] === value) || (saved.routeId ?? "") !== routeId ||
-          JSON.stringify(saved.practicedSkills ?? []) !== JSON.stringify(skills) || JSON.stringify(saved.practicedConditions ?? []) !== JSON.stringify(conditions)) throw new Error("Drive operation conflicts with an existing record.");
+          JSON.stringify(saved.practicedSkills ?? []) !== JSON.stringify(skills) || JSON.stringify(saved.practicedConditions ?? []) !== JSON.stringify(conditions)) throw rejected("Drive operation conflicts with an existing record.");
         return { driveId: drive.id, created: false };
       }
-      if (!route) throw new Error("Choose a saved route before recording a drive.");
-      if (route && !routeSnap.exists) throw new Error("Route is unavailable in this space.");
-      if (!routeSnap.data().geometry) throw new Error("Choose a mapped route before recording a drive.");
-      if (!routeApproved(routeSnap.data())) throw new Error("This route is waiting for the managing supervisor's approval.");
+      if (!route) throw rejected("Choose a saved route before recording a drive.");
+      if (route && !routeSnap.exists) throw rejected("Route is unavailable in this space.");
+      if (!routeSnap.data().geometry) throw rejected("Choose a mapped route before recording a drive.");
+      if (!routeApproved(routeSnap.data())) throw rejected("This route is waiting for the managing supervisor's approval.");
       routeGeometry(JSON.stringify(routeSnap.data().geometry));
       const routeDetails = route ? { routeId, routeSnapshot: { name: routeSnap.data().name, start: routeSnap.data().start, destination: routeSnap.data().destination, ...(routeSnap.data().geometry ? { geometry: routeSnap.data().geometry } : {}), ...(routeSnap.data().roadPolyline ? { roadPolyline: routeSnap.data().roadPolyline } : {}) } } : {};
       // Drives on a community route add to its totals: how often it was driven and by
@@ -263,10 +265,10 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   async function createRoute({ idToken, spaceId, operationId, name, start, destination, geometry: geometryInput, roadPolyline = "" }) {
     const caller = await identity(idToken);
     const validText = (value, max) => typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\r\n\u2028\u2029]/.test(value);
-    if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || !validText(name, 80) || !validText(start, 160) || !validText(destination, 160)) throw new Error("Invalid route details.");
+    if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || !validText(name, 80) || !validText(start, 160) || !validText(destination, 160)) throw rejected("Invalid route details.");
     const geometry = routeGeometry(geometryInput);
-    if (typeof roadPolyline !== "string") throw new Error("Invalid route line.");
-    if (roadPolyline) { if (!geometry) throw new Error("Invalid route line."); decodeRoutePolyline(roadPolyline); }
+    if (typeof roadPolyline !== "string") throw rejected("Invalid route line.");
+    if (roadPolyline) { if (!geometry) throw rejected("Invalid route line."); decodeRoutePolyline(roadPolyline); }
     const { space, member } = refs(spaceId, caller.uid);
     const route = space.collection("routes").doc(operationId);
     const data = { name: name.trim(), start: start.trim(), destination: destination.trim(), createdByUid: caller.uid };
@@ -275,11 +277,11 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       const actor = actorSnap.data();
       if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor", "learner"].includes(actor.role) || (actor.role === "manager" && caller.uid !== spaceSnap.data().managerUid)) throw unauthorized();
       if (existing.exists) {
-        if (!Object.entries(data).every(([key, value]) => existing.data()[key] === value) || JSON.stringify(existing.data().geometry ?? null) !== JSON.stringify(geometry) || (existing.data().roadPolyline ?? "") !== roadPolyline) throw new Error("Route operation conflicts with an existing record.");
+        if (!Object.entries(data).every(([key, value]) => existing.data()[key] === value) || JSON.stringify(existing.data().geometry ?? null) !== JSON.stringify(geometry) || (existing.data().roadPolyline ?? "") !== roadPolyline) throw rejected("Route operation conflicts with an existing record.");
         return { routeId: route.id, created: false };
       }
-      if (!geometry) throw new Error("Draw a route with at least two map points.");
-      if (!roadPolyline) throw new Error("Find a road route before saving.");
+      if (!geometry) throw rejected("Draw a route with at least two map points.");
+      if (!roadPolyline) throw rejected("Find a road route before saving.");
       // A learner's route is a proposal until the managing supervisor approves it.
       const status = actor.role === "learner" ? "proposed" : "approved";
       tx.create(route, { ...data, status, geometry, ...(roadPolyline ? { roadPolyline } : {}), createdAt: FieldValue.serverTimestamp() });
@@ -289,7 +291,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   async function editDrive({ idToken, spaceId, driveId, operationId, expectedRevision, date, minutes, nightMinutes, notes, practicedSkills, practicedConditions }) {
     const caller = await identity(idToken);
     if (typeof operationId !== "string" || !operationIdPattern.test(operationId) || typeof expectedRevision !== "string" || !/^(0|[1-9]\d{0,15})$/.test(expectedRevision) || !Number.isSafeInteger(Number(expectedRevision)) || Number(expectedRevision) >= Number.MAX_SAFE_INTEGER || !validDate(date) ||
-      typeof minutes !== "string" || !/^[1-9]\d{0,3}$/.test(minutes) || Number(minutes) > 1440 || typeof nightMinutes !== "string" || !/^(0|[1-9]\d{0,3})$/.test(nightMinutes) || Number(nightMinutes) > Number(minutes) || typeof notes !== "string" || notes.length > 1000) throw new Error("Invalid drive details.");
+      typeof minutes !== "string" || !/^[1-9]\d{0,3}$/.test(minutes) || Number(minutes) > 1440 || typeof nightMinutes !== "string" || !/^(0|[1-9]\d{0,3})$/.test(nightMinutes) || Number(nightMinutes) > Number(minutes) || typeof notes !== "string" || notes.length > 1000) throw rejected("Invalid drive details.");
     const skills = practiceTags(practicedSkills, PRACTICE_SKILLS), conditions = practiceTags(practicedConditions, PRACTICE_CONDITIONS);
     const { space, member } = refs(spaceId, caller.uid);
     const drive = space.collection("drives").doc(checkId(driveId));
@@ -301,11 +303,11 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !driveSnap.exists ||
         !((actor.role === "manager" && caller.uid === spaceSnap.data().managerUid) || (actor.role === "supervisor" && existing.recordedByUid === caller.uid))) throw unauthorized();
       if (operationSnap.exists) {
-        if (operationSnap.data().fingerprint !== fingerprint) throw new Error("Edit operation conflicts with an existing request.");
+        if (operationSnap.data().fingerprint !== fingerprint) throw rejected("Edit operation conflicts with an existing request.");
         return { driveId: drive.id, updated: false };
       }
       const revision = existing.revision ?? 0;
-      if (!Number.isSafeInteger(revision) || revision < 0 || revision !== Number(expectedRevision)) throw new Error("Drive changed on another device.");
+      if (!Number.isSafeInteger(revision) || revision < 0 || revision !== Number(expectedRevision)) throw rejected("Drive changed on another device.");
       tx.update(drive, { date, minutes: Number(minutes), nightMinutes: Number(nightMinutes), notes, practicedSkills: skills, practicedConditions: conditions, revision: revision + 1, lastEditedByUid: caller.uid, lastEditedAt: FieldValue.serverTimestamp() });
       tx.create(operation, { fingerprint, createdAt: FieldValue.serverTimestamp() });
       return { driveId: drive.id, updated: true };
@@ -316,7 +318,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   // changed on another device is not deleted unseen. Repeating a delete is harmless.
   async function deleteDrive({ idToken, spaceId, driveId, expectedRevision }) {
     const caller = await identity(idToken);
-    if (typeof expectedRevision !== "string" || !/^(0|[1-9]\d{0,15})$/.test(expectedRevision)) throw new Error("Invalid drive details.");
+    if (typeof expectedRevision !== "string" || !/^(0|[1-9]\d{0,15})$/.test(expectedRevision)) throw rejected("Invalid drive details.");
     const { space, member } = refs(spaceId, caller.uid);
     const drive = space.collection("drives").doc(checkId(driveId));
     return db.runTransaction(async (tx) => {
@@ -325,7 +327,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor"].includes(actor.role)) throw unauthorized();
       if (!driveSnap.exists) return { deleted: false };
       if (!((actor.role === "manager" && caller.uid === spaceSnap.data().managerUid) || (actor.role === "supervisor" && driveSnap.data().recordedByUid === caller.uid))) throw unauthorized();
-      if ((driveSnap.data().revision ?? 0) !== Number(expectedRevision)) throw new Error("Drive changed on another device.");
+      if ((driveSnap.data().revision ?? 0) !== Number(expectedRevision)) throw rejected("Drive changed on another device.");
       const counted = driveSnap.data().countedPublicRouteId;
       if (counted) {
         const publicRef = db.collection("publicRoutes").doc(counted), publicSnap = await tx.get(publicRef);
@@ -385,7 +387,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       if (data.managerUid !== caller.uid) throw unauthorized();
       if (data.status === "deleting") return "resume";
       if (!isManager(spaceSnap, managerSnap)) throw unauthorized();
-      if (typeof confirmName !== "string" || confirmName.trim() !== data.learnerName) throw new Error("Type the learner's name exactly to confirm.");
+      if (typeof confirmName !== "string" || confirmName.trim() !== data.learnerName) throw rejected("Type the learner's name exactly to confirm.");
       tx.update(space, { status: "deleting", deletingAt: FieldValue.serverTimestamp() });
       return "started";
     });
@@ -407,8 +409,8 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   // first, so a failed run is finished by signing in again and repeating it.
   async function deleteAccount({ idToken, confirmEmail }) {
     const caller = await identity(idToken);
-    if (emailKey(confirmEmail) !== caller.email) throw new Error("Type your account email exactly to confirm.");
-    if (!caller.authTime || now() - caller.authTime * 1000 > RECENT_SIGN_IN_MS) throw new Error("Sign in again to confirm.");
+    if (emailKey(confirmEmail) !== caller.email) throw rejected("Type your account email exactly to confirm.");
+    if (!caller.authTime || now() - caller.authTime * 1000 > RECENT_SIGN_IN_MS) throw rejected("Sign in again to confirm.");
     const user = db.collection("users").doc(caller.uid);
     const managedSpace = async () => {
       const links = await user.collection("spaceLinks").get();
@@ -418,10 +420,10 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       }
       return false;
     };
-    if (await managedSpace()) throw new Error("Delete the learner spaces you manage first.");
+    if (await managedSpace()) throw rejected("Delete the learner spaces you manage first.");
     await auth.revokeRefreshTokens(caller.uid);
     // A space created from another tab just before the revocation is caught here.
-    if (await managedSpace()) throw new Error("Delete the learner spaces you manage first.");
+    if (await managedSpace()) throw rejected("Delete the learner spaces you manage first.");
     const links = await user.collection("spaceLinks").get();
     for (const link of links.docs) {
       const { space, member } = refs(link.id, caller.uid);
@@ -443,7 +445,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   // a declined route can still be approved later, but an approved one stays approved.
   async function reviewRoute({ idToken, spaceId, routeId, decision, reason = "" }) {
     const caller = await identity(idToken);
-    if (!["approve", "decline"].includes(decision) || typeof reason !== "string" || reason.length > 300 || /[\u0000-\u0008\u000b-\u001f]/.test(reason)) throw new Error("Invalid review.");
+    if (!["approve", "decline"].includes(decision) || typeof reason !== "string" || reason.length > 300 || /[\u0000-\u0008\u000b-\u001f]/.test(reason)) throw rejected("Invalid review.");
     const { space, member } = refs(spaceId, caller.uid);
     const route = space.collection("routes").doc(checkId(routeId));
     return db.runTransaction(async (tx) => {
@@ -452,7 +454,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       const current = routeSnap.data().status;
       const target = decision === "approve" ? "approved" : "declined";
       if (current === target) return { status: target, updated: false };
-      if (!["proposed", "declined"].includes(current) || (target === "declined" && current !== "proposed")) throw new Error("Only a proposed route can be reviewed.");
+      if (!["proposed", "declined"].includes(current) || (target === "declined" && current !== "proposed")) throw rejected("Only a proposed route can be reviewed.");
       tx.update(route, { status: target, reviewedByUid: caller.uid, reviewedAt: FieldValue.serverTimestamp(), declineReason: target === "declined" ? reason.trim() : FieldValue.delete() });
       return { status: target, updated: true };
     });
@@ -463,7 +465,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   // supervisor's record. An empty reflection removes it.
   async function setReflection({ idToken, spaceId, driveId, reflection }) {
     const caller = await identity(idToken);
-    if (typeof reflection !== "string" || reflection.length > 1000) throw new Error("Invalid reflection.");
+    if (typeof reflection !== "string" || reflection.length > 1000) throw rejected("Invalid reflection.");
     const { space, member } = refs(spaceId, caller.uid);
     const drive = space.collection("drives").doc(checkId(driveId));
     const text = reflection.trim();
@@ -483,16 +485,14 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
     await db.collection("publicRouteSources").doc(publicRouteId).delete();
   }
 
-  // Private places (home, school, work) are used only to cut the line and are never
-  // stored. The privacy radius is 400–600 m, fixed per route so republishing the same
-  // route doesn't reveal more about where its circles are centred.
-  async function publishRoute({ idToken, spaceId, routeId, name, description = "", area, practicedSkills, practicedConditions, privatePlaces = "[]", confirmPrivacy }) {
+  // The whole route is shared as drawn, start and end included: the manager confirms
+  // it starts and ends at public places and doesn't pass their home. (Cutting gaps
+  // around private places was tried and dropped: gaps across several routes from one
+  // family could point to where they live.)
+  async function publishRoute({ idToken, spaceId, routeId, name, description = "", area, practicedSkills, practicedConditions, confirmPrivacy }) {
     const caller = await identity(idToken);
-    if (!oneLine(name, 3, 80) || !oneLine(area, 2, 60) || typeof description !== "string" || description.length > 300 || /[\u0000-\u0008\u000b-\u001f]/.test(description)) throw new Error("Invalid public route details.");
-    if (confirmPrivacy !== "yes") throw new Error("Confirm that the shared route shows no private places.");
-    let places;
-    try { places = typeof privatePlaces === "string" && privatePlaces.length <= 600 ? JSON.parse(privatePlaces) : null; } catch { places = null; }
-    if (!validPrivatePlaces(places)) throw new Error("Invalid private places.");
+    if (!oneLine(name, 3, 80) || !oneLine(area, 2, 60) || typeof description !== "string" || description.length > 300 || /[\u0000-\u0008\u000b-\u001f]/.test(description)) throw rejected("Invalid public route details.");
+    if (confirmPrivacy !== "yes") throw rejected("Confirm that the route doesn't start, end or pass at a private place.");
     const skills = practiceTags(practicedSkills, PRACTICE_SKILLS), conditions = practiceTags(practicedConditions, PRACTICE_CONDITIONS);
     const { space, member } = refs(spaceId, caller.uid);
     const route = space.collection("routes").doc(checkId(routeId));
@@ -504,16 +504,14 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
         const existing = await tx.get(db.collection("publicRoutes").doc(data.publicRouteId));
         if (existing.exists) return { publicRouteId: data.publicRouteId, created: false };
       }
-      if (!routeApproved(data)) throw new Error("Only an approved route can be shared.");
-      if (!data.roadPolyline) throw new Error("Only a route that follows roads can be shared.");
-      const radius = MIN_PRIVACY_RADIUS_M + (createHash("sha256").update(`${space.id}/${route.id}`).digest().readUInt16BE(0) % (MAX_PRIVACY_RADIUS_M - MIN_PRIVACY_RADIUS_M + 1));
-      const shareable = publicLine(decodeRoutePolyline(data.roadPolyline), places.map(({ lat, lng }) => ({ lat, lng })), radius);
-      if (!shareable) throw new Error("Too little of this route is far enough from its start, end and private places to share.");
-      const line = samplePoints(shareable, 1000);
+      if (!routeApproved(data)) throw rejected("Only an approved route can be shared.");
+      if (!data.roadPolyline) throw rejected("Only a route that follows roads can be shared.");
+      const line = samplePoints(decodeRoutePolyline(data.roadPolyline).map(({ lat, lng }) => ({ lat: Math.round(lat * 1e5) / 1e5, lng: Math.round(lng * 1e5) / 1e5 })), 1000);
       const publicRef = db.collection("publicRoutes").doc();
       tx.create(publicRef, { name: name.trim(), description: description.trim(), area: area.trim(), practicedSkills: skills, practicedConditions: conditions, line: encodeRoutePolyline(line), lengthKm: Math.round(lineLengthM(line) / 100) / 10, reportCount: 0, saveCount: 0, practicedCount: 0, driveCount: 0, ratingCount: 0, starsTotal: 0, difficultyTotal: 0, tipReportCount: 0, publishedAt: FieldValue.serverTimestamp() });
       tx.create(db.collection("publicRouteSources").doc(publicRef.id), { spaceId: space.id, routeId: route.id, publishedByUid: caller.uid, publishedAt: FieldValue.serverTimestamp() });
-      tx.update(route, { publicRouteId: publicRef.id });
+      // The family's own route remembers the skills too, so its drive form can suggest them.
+      tx.update(route, { publicRouteId: publicRef.id, suggestedSkills: skills, suggestedConditions: conditions });
       return { publicRouteId: publicRef.id, created: true };
     });
   }
@@ -535,7 +533,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
 
   async function reportPublicRoute({ idToken, publicRouteId, reason, note = "" }) {
     const caller = await identity(idToken);
-    if (!REPORT_REASONS.includes(reason) || typeof note !== "string" || note.length > 300 || /[\u0000-\u0008\u000b-\u001f]/.test(note)) throw new Error("Invalid report.");
+    if (!REPORT_REASONS.includes(reason) || typeof note !== "string" || note.length > 300 || /[\u0000-\u0008\u000b-\u001f]/.test(note)) throw rejected("Invalid report.");
     const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
     const report = publicRef.collection("reports").doc(caller.uid);
     return db.runTransaction(async (tx) => {
@@ -552,7 +550,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   // an ordinary approved route. The operation ID makes retries safe.
   async function savePublicRoute({ idToken, publicRouteId, spaceId, operationId }) {
     const caller = await identity(idToken);
-    if (typeof operationId !== "string" || !operationIdPattern.test(operationId)) throw new Error("Invalid route details.");
+    if (typeof operationId !== "string" || !operationIdPattern.test(operationId)) throw rejected("Invalid route details.");
     const { space, member } = refs(spaceId, caller.uid);
     const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
     const route = space.collection("routes").doc(operationId);
@@ -562,13 +560,13 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       const actor = actorSnap.data();
       if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor"].includes(actor.role) || (actor.role === "manager" && caller.uid !== spaceSnap.data().managerUid)) throw unauthorized();
       if (existing.exists) {
-        if (existing.data().createdByUid !== caller.uid || existing.data().sourcePublicRouteId !== publicRef.id) throw new Error("Route operation conflicts with an existing record.");
+        if (existing.data().createdByUid !== caller.uid || existing.data().sourcePublicRouteId !== publicRef.id) throw rejected("Route operation conflicts with an existing record.");
         return { routeId: route.id, created: false };
       }
-      if (!publicSnap.exists) throw new Error("This public route is no longer available.");
+      if (!publicSnap.exists) throw rejected("This public route is no longer available.");
       const item = publicSnap.data();
       const line = decodeRoutePolyline(item.line);
-      tx.create(route, { name: item.name, start: "Community route", destination: item.area, geometry: samplePoints(line, 50).map(({ lat, lng }) => ({ lat, lng })), roadPolyline: item.line, createdByUid: caller.uid, status: "approved", sourcePublicRouteId: publicRef.id, createdAt: FieldValue.serverTimestamp() });
+      tx.create(route, { name: item.name, start: "Community route", destination: item.area, geometry: samplePoints(line, 50).map(({ lat, lng }) => ({ lat, lng })), roadPolyline: item.line, createdByUid: caller.uid, status: "approved", sourcePublicRouteId: publicRef.id, suggestedSkills: item.practicedSkills ?? [], suggestedConditions: item.practicedConditions ?? [], createdAt: FieldValue.serverTimestamp() });
       if (!savedSnap.exists) { tx.create(savedBy, { since: FieldValue.serverTimestamp() }); tx.update(publicRef, { saveCount: FieldValue.increment(1) }); }
       return { routeId: route.id, created: true };
     });
@@ -598,7 +596,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   }
   async function moderatePublicRoute({ idToken, publicRouteId, action, tipId: targetTip = "" }) {
     await moderator(idToken);
-    if (!["remove", "dismiss", "removeTip", "keepTip"].includes(action)) throw new Error("Invalid moderation action.");
+    if (!["remove", "dismiss", "removeTip", "keepTip"].includes(action)) throw rejected("Invalid moderation action.");
     const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
     if (action === "removeTip" || action === "keepTip") {
       const tip = publicRef.collection("tips").doc(checkId(targetTip));
@@ -648,9 +646,9 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   }
   async function rateRoute({ idToken, publicRouteId, stars, difficulty }) {
     const caller = await identity(idToken);
-    if (!/^[1-5]$/.test(stars ?? "") || !/^[1-5]$/.test(difficulty ?? "")) throw new Error("Invalid rating.");
+    if (!/^[1-5]$/.test(stars ?? "") || !/^[1-5]$/.test(difficulty ?? "")) throw rejected("Invalid rating.");
     const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
-    if (!(await practisedRoute(caller, publicRef))) throw new Error("Log a drive on this route before rating it.");
+    if (!(await practisedRoute(caller, publicRef))) throw rejected("Log a drive on this route before rating it.");
     const rating = publicRef.collection("ratings").doc(caller.uid);
     return db.runTransaction(async (tx) => {
       const [publicSnap, ratingSnap] = await tx.getAll(publicRef, rating);
@@ -663,9 +661,9 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   }
   async function setRouteTip({ idToken, publicRouteId, text }) {
     const caller = await identity(idToken);
-    if (typeof text !== "string" || text.length > 280 || /[\u0000-\u0008\u000b-\u001f]/.test(text)) throw new Error("Invalid tip.");
+    if (typeof text !== "string" || text.length > 280 || /[\u0000-\u0008\u000b-\u001f]/.test(text)) throw rejected("Invalid tip.");
     const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
-    if (!(await practisedRoute(caller, publicRef))) throw new Error("Log a drive on this route before leaving a tip.");
+    if (!(await practisedRoute(caller, publicRef))) throw rejected("Log a drive on this route before leaving a tip.");
     const tip = publicRef.collection("tips").doc(tipId(caller.uid, publicRef.id)), clean = text.trim();
     return db.runTransaction(async (tx) => {
       const [publicSnap, tipSnap] = await tx.getAll(publicRef, tip);
@@ -678,7 +676,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   }
   async function reportTip({ idToken, publicRouteId, tipId: reportedTip, reason }) {
     const caller = await identity(idToken);
-    if (!REPORT_REASONS.includes(reason)) throw new Error("Invalid report.");
+    if (!REPORT_REASONS.includes(reason)) throw rejected("Invalid report.");
     const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
     const tip = publicRef.collection("tips").doc(checkId(reportedTip)), report = tip.collection("reports").doc(caller.uid);
     return db.runTransaction(async (tx) => {

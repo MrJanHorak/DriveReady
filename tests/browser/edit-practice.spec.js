@@ -60,7 +60,7 @@ test("shared edits retry safely, reject stale changes and remain visible to the 
     await expect(authorPage.getByText("Practice changes saved.")).toBeVisible();
     expect((await drive.get()).data().revision).toBe(1);
     await managerPage.getByRole("button", { name: "Save practice changes" }).click();
-    await expect(managerPage.getByText("Could not confirm the request.", { exact: false })).toBeVisible();
+    await expect(managerPage.getByText("Drive changed on another device.")).toBeVisible();
     expect((await drive.get()).data().notes).toBe("Author correction");
     await managerPage.getByRole("button", { name: "Refresh spaces" }).click();
     await managerPage.getByRole("button", { name: "Refresh practice history" }).click();

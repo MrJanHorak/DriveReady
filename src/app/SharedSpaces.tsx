@@ -137,7 +137,12 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
     if (busyRef.current || disabled || !verified || uncertain) return;
     busyRef.current = true; setBusy(true); onBusyChange(true); setStatus("");
     try { await action(); }
-    catch { if (alive.current) { setUncertain(true); setStatus("Could not confirm the request. Refresh spaces and check the result before trying again."); } }
+    catch (error) {
+      if (!alive.current) return;
+      // A refusal with a reason changed nothing, so the page stays usable.
+      if ((error as { rejected?: boolean })?.rejected) setStatus((error as Error).message);
+      else { setUncertain(true); setStatus("Could not confirm the request. Refresh spaces and check the result before trying again."); }
+    }
     finally { busyRef.current = false; if (alive.current) setBusy(false); onBusyChange(false); }
   }
   const blocked = busy || disabled || !verified || uncertain;
