@@ -143,4 +143,15 @@ test("the public route library is readable only by verified accounts; reports an
   await assertFails(getDocFromServer(doc(verified, "publicRoutes/pub-1/reports/someone")));
   await assertFails(getDocs(collection(verified, "publicRoutes/pub-1/reports")));
   await assertFails(getDocFromServer(doc(verified, "publicRouteSources/pub-1")));
+  await env.withSecurityRulesDisabled(async (admin) => {
+    const db = admin.firestore();
+    await setDoc(doc(db, "publicRoutes/pub-1/tips/tip-1"), { text: "Quiet on Sundays", reportCount: 0 });
+    await setDoc(doc(db, "publicRoutes/pub-1/tips/tip-1/reports/someone"), { reason: "other" });
+    for (const path of ["ratings/someone", "practicedBy/space-a", "savedBy/space-a"]) await setDoc(doc(db, `publicRoutes/pub-1/${path}`), { x: 1 });
+  });
+  await assertSucceeds(getDocs(collection(verified, "publicRoutes/pub-1/tips")));
+  for (const db of [unverified, guest]) await assertFails(getDocs(collection(db, "publicRoutes/pub-1/tips")));
+  await assertFails(setDoc(doc(verified, "publicRoutes/pub-1/tips/mine"), { text: "Sneaky" }));
+  await assertFails(getDocs(collection(verified, "publicRoutes/pub-1/tips/tip-1/reports")));
+  for (const path of ["ratings", "practicedBy", "savedBy"]) await assertFails(getDocs(collection(verified, `publicRoutes/pub-1/${path}`)));
 });

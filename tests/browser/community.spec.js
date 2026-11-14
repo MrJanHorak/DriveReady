@@ -86,12 +86,55 @@ test("a manager shares a route, another family saves and reports it, and a moder
     const saved = (await spaceB.collection("routes").where("sourcePublicRouteId", "==", publicId).get()).docs;
     expect(saved).toHaveLength(1);
     expect(saved[0].data().status).toBe("approved");
+    await expect(details.getByRole("region", { name: "Rate this route" })).toHaveCount(0);
+    await expect(details).toContainText("Log a drive on this route to rate it");
+    await expect(details.getByLabel("Community stats")).toContainText("Saved by1 family");
+
+    // Family B drives it, then rates it and leaves a tip.
+    await nav(saverPage, "Driving Logs");
+    await saverPage.getByRole("button", { name: "Log a drive", exact: true }).click();
+    await saverPage.getByLabel("Choose a saved route").selectOption(saved[0].id);
+    await saverPage.getByLabel("Practice date").fill("2026-11-10");
+    await saverPage.getByLabel("Total minutes").fill("30");
+    await saverPage.getByRole("button", { name: "Save shared practice" }).click();
+    await expect(saverPage.getByText("Practice drive saved.")).toBeVisible();
+    expect((await db.doc(`publicRoutes/${publicId}`).get()).data()).toMatchObject({ driveCount: 1, practicedCount: 1, saveCount: 1 });
+    await nav(saverPage, "Community");
+    await saverPage.getByRole("button", { name: "Refresh", exact: true }).click();
+    await list.getByRole("button", { name: /Lakeside loop with four-way stops/ }).click();
+    await expect(details.getByLabel("Community stats")).toContainText("Driven1 time");
+    const rate = details.getByRole("region", { name: "Rate this route" });
+    await rate.getByRole("radio", { name: "4 stars" }).click();
+    await rate.getByRole("radio", { name: /Moderate/ }).click();
+    await rate.getByRole("button", { name: "Save rating" }).click();
+    await expect(saverPage.getByText("Thanks for rating this route.")).toBeVisible();
+    await expect(details.getByLabel("Community difficulty")).toContainText("Moderate · 3.0 of 5");
+    await expect(details.getByLabel("Community difficulty")).toContainText("early estimate");
+    await expect(list).toContainText("4.0");
+    await rate.getByLabel("Tip for other families", { exact: false }).fill("The four-way stop by the park is busy after school.");
+    await rate.getByRole("button", { name: "Share tip" }).click();
+    await expect(details.getByRole("region", { name: "Tips from families" })).toContainText("The four-way stop by the park is busy after school.");
+    await expect(details.getByRole("region", { name: "Tips from families" })).toContainText("Your tip");
+    const tipDocs = await db.collection(`publicRoutes/${publicId}/tips`).get();
+    expect(JSON.stringify(tipDocs.docs[0].data())).not.toContain(saver.uid);
+
     await details.getByRole("button", { name: "Report this route" }).click();
     await details.getByLabel("Shows a private place").check();
     await details.getByLabel("Details", { exact: false }).fill("Ends near a driveway.");
     await details.getByRole("button", { name: "Send report" }).click();
     await expect(saverPage.getByText("The report was sent to DriveReady’s moderators.", { exact: false })).toBeVisible();
     await expect(saverPage.getByRole("region", { name: "Reported routes" })).toHaveCount(0);
+
+    // Family A reports the tip.
+    await nav(page, "Community");
+    const sharerDetails = page.getByRole("region", { name: "Selected community route" });
+    await page.getByRole("list", { name: "Community route list" }).getByRole("button", { name: /Lakeside loop/ }).click();
+    const tipsA = sharerDetails.getByRole("region", { name: "Tips from families" });
+    await expect(tipsA).toContainText("A DriveReady family");
+    await tipsA.getByRole("button", { name: "Report" }).click();
+    await tipsA.getByRole("button", { name: "Inappropriate name or description" }).click();
+    await expect(page.getByText("The tip was sent to DriveReady’s moderators.", { exact: false })).toBeVisible();
+    await nav(page, "Routes");
 
     // The moderator sees the report and dismisses it.
     const modPage = await open(moderator.email);
@@ -100,6 +143,9 @@ test("a manager shares a route, another family saves and reports it, and a moder
     await expect(reports).toContainText("Lakeside loop with four-way stops");
     await expect(reports).toContainText("Shows a private place");
     await expect(reports).toContainText("Ends near a driveway.");
+    await expect(reports.getByRole("list", { name: "Reported tips" })).toContainText("The four-way stop by the park is busy after school.");
+    await reports.getByRole("button", { name: "Keep tip" }).click();
+    await expect(modPage.getByText("The tip was kept", { exact: false })).toBeVisible();
     await reports.getByRole("button", { name: "Dismiss reports" }).click();
     await expect(reports).toContainText("No open reports.");
 

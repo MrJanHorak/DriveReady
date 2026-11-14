@@ -243,7 +243,20 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       if (!routeApproved(routeSnap.data())) throw new Error("This route is waiting for the managing supervisor's approval.");
       routeGeometry(JSON.stringify(routeSnap.data().geometry));
       const routeDetails = route ? { routeId, routeSnapshot: { name: routeSnap.data().name, start: routeSnap.data().start, destination: routeSnap.data().destination, ...(routeSnap.data().geometry ? { geometry: routeSnap.data().geometry } : {}), ...(routeSnap.data().roadPolyline ? { roadPolyline: routeSnap.data().roadPolyline } : {}) } } : {};
-      tx.create(drive, { ...data, practicedSkills: skills, practicedConditions: conditions, ...routeDetails, createdAt: FieldValue.serverTimestamp() });
+      // Drives on a community route add to its totals: how often it was driven and by
+      // how many families. Only counts are kept, never who drove it or when.
+      const publicId = routeSnap.data().sourcePublicRouteId || routeSnap.data().publicRouteId;
+      let counted = "";
+      if (publicId) {
+        const publicRef = db.collection("publicRoutes").doc(publicId), practiced = publicRef.collection("practicedBy").doc(space.id);
+        const [publicSnap, practicedSnap] = await tx.getAll(publicRef, practiced);
+        if (publicSnap.exists) {
+          counted = publicId;
+          tx.update(publicRef, { driveCount: FieldValue.increment(1), ...(practicedSnap.exists ? {} : { practicedCount: FieldValue.increment(1) }) });
+          if (!practicedSnap.exists) tx.create(practiced, { since: FieldValue.serverTimestamp() });
+        }
+      }
+      tx.create(drive, { ...data, practicedSkills: skills, practicedConditions: conditions, ...routeDetails, ...(counted ? { countedPublicRouteId: counted } : {}), createdAt: FieldValue.serverTimestamp() });
       return { driveId: drive.id, created: true };
     });
   }
@@ -313,6 +326,11 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       if (!driveSnap.exists) return { deleted: false };
       if (!((actor.role === "manager" && caller.uid === spaceSnap.data().managerUid) || (actor.role === "supervisor" && driveSnap.data().recordedByUid === caller.uid))) throw unauthorized();
       if ((driveSnap.data().revision ?? 0) !== Number(expectedRevision)) throw new Error("Drive changed on another device.");
+      const counted = driveSnap.data().countedPublicRouteId;
+      if (counted) {
+        const publicRef = db.collection("publicRoutes").doc(counted), publicSnap = await tx.get(publicRef);
+        if (publicSnap.exists && (publicSnap.data().driveCount ?? 0) > 0) tx.update(publicRef, { driveCount: FieldValue.increment(-1) });
+      }
       tx.delete(drive);
       return { deleted: true };
     });
@@ -493,7 +511,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       if (!shareable) throw new Error("Too little of this route is far enough from its start, end and private places to share.");
       const line = samplePoints(shareable, 1000);
       const publicRef = db.collection("publicRoutes").doc();
-      tx.create(publicRef, { name: name.trim(), description: description.trim(), area: area.trim(), practicedSkills: skills, practicedConditions: conditions, line: encodeRoutePolyline(line), lengthKm: Math.round(lineLengthM(line) / 100) / 10, reportCount: 0, publishedAt: FieldValue.serverTimestamp() });
+      tx.create(publicRef, { name: name.trim(), description: description.trim(), area: area.trim(), practicedSkills: skills, practicedConditions: conditions, line: encodeRoutePolyline(line), lengthKm: Math.round(lineLengthM(line) / 100) / 10, reportCount: 0, saveCount: 0, practicedCount: 0, driveCount: 0, ratingCount: 0, starsTotal: 0, difficultyTotal: 0, tipReportCount: 0, publishedAt: FieldValue.serverTimestamp() });
       tx.create(db.collection("publicRouteSources").doc(publicRef.id), { spaceId: space.id, routeId: route.id, publishedByUid: caller.uid, publishedAt: FieldValue.serverTimestamp() });
       tx.update(route, { publicRouteId: publicRef.id });
       return { publicRouteId: publicRef.id, created: true };
@@ -539,7 +557,8 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
     const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
     const route = space.collection("routes").doc(operationId);
     return db.runTransaction(async (tx) => {
-      const [spaceSnap, actorSnap, publicSnap, existing] = await tx.getAll(space, member, publicRef, route);
+      const savedBy = publicRef.collection("savedBy").doc(space.id);
+      const [spaceSnap, actorSnap, publicSnap, existing, savedSnap] = await tx.getAll(space, member, publicRef, route, savedBy);
       const actor = actorSnap.data();
       if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor"].includes(actor.role) || (actor.role === "manager" && caller.uid !== spaceSnap.data().managerUid)) throw unauthorized();
       if (existing.exists) {
@@ -550,6 +569,7 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
       const item = publicSnap.data();
       const line = decodeRoutePolyline(item.line);
       tx.create(route, { name: item.name, start: "Community route", destination: item.area, geometry: samplePoints(line, 50).map(({ lat, lng }) => ({ lat, lng })), roadPolyline: item.line, createdByUid: caller.uid, status: "approved", sourcePublicRouteId: publicRef.id, createdAt: FieldValue.serverTimestamp() });
+      if (!savedSnap.exists) { tx.create(savedBy, { since: FieldValue.serverTimestamp() }); tx.update(publicRef, { saveCount: FieldValue.increment(1) }); }
       return { routeId: route.id, created: true };
     });
   }
@@ -565,17 +585,30 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
   }
   async function listReportedRoutes({ idToken }) {
     await moderator(idToken);
-    const reported = await db.collection("publicRoutes").where("reportCount", ">", 0).orderBy("reportCount", "desc").limit(50).get();
-    const routes = await Promise.all(reported.docs.map(async (item) => {
-      const reports = await item.ref.collection("reports").orderBy("createdAt", "desc").limit(20).get();
-      return { id: item.id, name: item.data().name, area: item.data().area, reportCount: item.data().reportCount, reports: reports.docs.map((report) => ({ reason: report.data().reason, note: report.data().note ?? "", createdAt: report.data().createdAt?.toMillis?.() ?? 0 })) };
+    const [routeReports, tipReports] = await Promise.all([
+      db.collection("publicRoutes").where("reportCount", ">", 0).orderBy("reportCount", "desc").limit(50).get(),
+      db.collection("publicRoutes").where("tipReportCount", ">", 0).orderBy("tipReportCount", "desc").limit(50).get(),
+    ]);
+    const docs = [...routeReports.docs, ...tipReports.docs.filter((item) => !routeReports.docs.some((other) => other.id === item.id))];
+    const routes = await Promise.all(docs.map(async (item) => {
+      const [reports, tips] = await Promise.all([item.ref.collection("reports").orderBy("createdAt", "desc").limit(20).get(), item.ref.collection("tips").where("reportCount", ">", 0).limit(20).get()]);
+      return { id: item.id, name: item.data().name, area: item.data().area, reportCount: item.data().reportCount ?? 0, reports: reports.docs.map((report) => ({ reason: report.data().reason, note: report.data().note ?? "", createdAt: report.data().createdAt?.toMillis?.() ?? 0 })), tips: tips.docs.map((tip) => ({ id: tip.id, text: tip.data().text, reportCount: tip.data().reportCount })) };
     }));
     return { routes };
   }
-  async function moderatePublicRoute({ idToken, publicRouteId, action }) {
+  async function moderatePublicRoute({ idToken, publicRouteId, action, tipId: targetTip = "" }) {
     await moderator(idToken);
-    if (!["remove", "dismiss"].includes(action)) throw new Error("Invalid moderation action.");
+    if (!["remove", "dismiss", "removeTip", "keepTip"].includes(action)) throw new Error("Invalid moderation action.");
     const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
+    if (action === "removeTip" || action === "keepTip") {
+      const tip = publicRef.collection("tips").doc(checkId(targetTip));
+      const tipSnap = await tip.get();
+      const count = tipSnap.exists ? tipSnap.data().reportCount ?? 0 : 0;
+      if (action === "removeTip") await db.recursiveDelete(tip);
+      else if (tipSnap.exists) { const reports = await tip.collection("reports").get(); const writer = db.bulkWriter(); for (const report of reports.docs) writer.delete(report.ref); await writer.close(); await tip.update({ reportCount: 0 }); }
+      await db.runTransaction(async (tx) => { const snap = await tx.get(publicRef); if (snap.exists) tx.update(publicRef, { tipReportCount: Math.max(0, (snap.data().tipReportCount ?? 0) - count) }); });
+      return { [action === "removeTip" ? "removed" : "kept"]: true };
+    }
     if (action === "dismiss") {
       const reports = await publicRef.collection("reports").get();
       const writer = db.bulkWriter();
@@ -592,5 +625,71 @@ export function createSharedAccessService({ db, auth, now = Date.now, isModerato
     await removePublic(publicRef.id);
     return { removed: true };
   }
-  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive, deleteDrive, deleteRoute, leaveSpace, deleteSpace, deleteAccount, reviewRoute, setReflection, publishRoute, unpublishRoute, reportPublicRoute, savePublicRoute, moderationStatus, listReportedRoutes, moderatePublicRoute };
+  // ---- Community reviews ----------------------------------------------------
+  // Anyone in a family that has logged at least one drive on a community route can
+  // rate it (1–5 stars and a 1–5 difficulty) and leave one short tip. Ratings are kept
+  // per account, server-only, so each person counts once and can change their mind;
+  // the public record holds only totals. Tips carry no name or account.
+  const tipId = (uid, publicRouteId) => createHash("sha256").update(`tip:${uid}:${publicRouteId}`).digest("hex").slice(0, 32);
+  async function practisedRoute(caller, publicRef) {
+    const links = await db.collection("users").doc(caller.uid).collection("spaceLinks").get();
+    for (const link of links.docs) {
+      const [practiced, membership, spaceSnap] = await db.getAll(publicRef.collection("practicedBy").doc(link.id), db.collection("spaces").doc(link.id).collection("members").doc(caller.uid), db.collection("spaces").doc(link.id));
+      if (practiced.exists && membership.exists && membership.data().active === true && spaceSnap.exists && spaceSnap.data().status === "active") return true;
+    }
+    return false;
+  }
+  async function myRouteReview({ idToken, publicRouteId }) {
+    const caller = await identity(idToken);
+    const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
+    const [publicSnap, ratingSnap, tipSnap] = await db.getAll(publicRef, publicRef.collection("ratings").doc(caller.uid), publicRef.collection("tips").doc(tipId(caller.uid, publicRef.id)));
+    if (!publicSnap.exists) throw unauthorized();
+    return { canReview: await practisedRoute(caller, publicRef), rating: ratingSnap.exists ? { stars: ratingSnap.data().stars, difficulty: ratingSnap.data().difficulty } : null, tip: tipSnap.exists ? tipSnap.data().text : "", tipId: tipSnap.exists ? tipSnap.id : "" };
+  }
+  async function rateRoute({ idToken, publicRouteId, stars, difficulty }) {
+    const caller = await identity(idToken);
+    if (!/^[1-5]$/.test(stars ?? "") || !/^[1-5]$/.test(difficulty ?? "")) throw new Error("Invalid rating.");
+    const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
+    if (!(await practisedRoute(caller, publicRef))) throw new Error("Log a drive on this route before rating it.");
+    const rating = publicRef.collection("ratings").doc(caller.uid);
+    return db.runTransaction(async (tx) => {
+      const [publicSnap, ratingSnap] = await tx.getAll(publicRef, rating);
+      if (!publicSnap.exists) throw unauthorized();
+      const before = ratingSnap.exists ? ratingSnap.data() : null, next = { stars: Number(stars), difficulty: Number(difficulty) };
+      tx.set(rating, { ...next, updatedAt: FieldValue.serverTimestamp() });
+      tx.update(publicRef, { ratingCount: FieldValue.increment(before ? 0 : 1), starsTotal: FieldValue.increment(next.stars - (before?.stars ?? 0)), difficultyTotal: FieldValue.increment(next.difficulty - (before?.difficulty ?? 0)) });
+      return { saved: true, updated: !!before };
+    });
+  }
+  async function setRouteTip({ idToken, publicRouteId, text }) {
+    const caller = await identity(idToken);
+    if (typeof text !== "string" || text.length > 280 || /[\u0000-\u0008\u000b-\u001f]/.test(text)) throw new Error("Invalid tip.");
+    const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
+    if (!(await practisedRoute(caller, publicRef))) throw new Error("Log a drive on this route before leaving a tip.");
+    const tip = publicRef.collection("tips").doc(tipId(caller.uid, publicRef.id)), clean = text.trim();
+    return db.runTransaction(async (tx) => {
+      const [publicSnap, tipSnap] = await tx.getAll(publicRef, tip);
+      if (!publicSnap.exists) throw unauthorized();
+      if (!clean) { if (tipSnap.exists) tx.delete(tip); return { saved: false, removed: tipSnap.exists }; }
+      // Editing a tip clears earlier reports about it, but the moderator still sees new ones.
+      tx.set(tip, { text: clean, createdAt: tipSnap.exists ? tipSnap.data().createdAt : FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), reportCount: tipSnap.exists ? tipSnap.data().reportCount ?? 0 : 0 });
+      return { saved: true, tipId: tip.id };
+    });
+  }
+  async function reportTip({ idToken, publicRouteId, tipId: reportedTip, reason }) {
+    const caller = await identity(idToken);
+    if (!REPORT_REASONS.includes(reason)) throw new Error("Invalid report.");
+    const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
+    const tip = publicRef.collection("tips").doc(checkId(reportedTip)), report = tip.collection("reports").doc(caller.uid);
+    return db.runTransaction(async (tx) => {
+      const [publicSnap, tipSnap, reportSnap] = await tx.getAll(publicRef, tip, report);
+      if (!publicSnap.exists || !tipSnap.exists) throw unauthorized();
+      if (reportSnap.exists) return { reported: false };
+      tx.create(report, { reason, createdAt: FieldValue.serverTimestamp() });
+      tx.update(tip, { reportCount: FieldValue.increment(1) });
+      tx.update(publicRef, { tipReportCount: FieldValue.increment(1) });
+      return { reported: true };
+    });
+  }
+  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive, deleteDrive, deleteRoute, leaveSpace, deleteSpace, deleteAccount, reviewRoute, setReflection, publishRoute, unpublishRoute, reportPublicRoute, savePublicRoute, moderationStatus, listReportedRoutes, moderatePublicRoute, myRouteReview, rateRoute, setRouteTip, reportTip };
 }

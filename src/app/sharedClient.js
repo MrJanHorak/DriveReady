@@ -27,7 +27,7 @@ export const sharedServiceMisconfigured = !sharedAccessDemo && !!import.meta.env
 export const sharedAccessEnabled = sharedAccessDemo || (!!hostedService && firebaseConfigured);
 
 const gateway = sharedAccessDemo ? (import.meta.env.VITE_SHARED_GATEWAY_PORT === "4176" ? "http://127.0.0.1:4176" : "http://127.0.0.1:4175") : hostedService;
-const paths = Object.freeze({ createSpace: "/v1/spaces", createInvitation: "/v1/invitations", previewInvitation: "/v1/invitations/preview", acceptInvitation: "/v1/invitations/accept", removeMember: "/v1/members/remove", listInvitations: "/v1/invitations/list", cancelInvitationById: "/v1/invitations/cancel-by-id", createDrive: "/v1/drives", editDrive: "/v1/drives/edit", createRoute: "/v1/routes", deleteRoute: "/v1/routes/delete", deleteDrive: "/v1/drives/delete", leaveSpace: "/v1/spaces/leave", deleteSpace: "/v1/spaces/delete", deleteAccount: "/v1/account/delete", reviewRoute: "/v1/routes/review", setReflection: "/v1/drives/reflection", publishRoute: "/v1/public/publish", unpublishRoute: "/v1/public/unpublish", reportPublicRoute: "/v1/public/report", savePublicRoute: "/v1/public/save", moderationStatus: "/v1/moderation/status", listReportedRoutes: "/v1/moderation/reports", moderatePublicRoute: "/v1/moderation/act" });
+const paths = Object.freeze({ createSpace: "/v1/spaces", createInvitation: "/v1/invitations", previewInvitation: "/v1/invitations/preview", acceptInvitation: "/v1/invitations/accept", removeMember: "/v1/members/remove", listInvitations: "/v1/invitations/list", cancelInvitationById: "/v1/invitations/cancel-by-id", createDrive: "/v1/drives", editDrive: "/v1/drives/edit", createRoute: "/v1/routes", deleteRoute: "/v1/routes/delete", deleteDrive: "/v1/drives/delete", leaveSpace: "/v1/spaces/leave", deleteSpace: "/v1/spaces/delete", deleteAccount: "/v1/account/delete", reviewRoute: "/v1/routes/review", setReflection: "/v1/drives/reflection", publishRoute: "/v1/public/publish", unpublishRoute: "/v1/public/unpublish", reportPublicRoute: "/v1/public/report", savePublicRoute: "/v1/public/save", moderationStatus: "/v1/moderation/status", listReportedRoutes: "/v1/moderation/reports", moderatePublicRoute: "/v1/moderation/act", myRouteReview: "/v1/public/my-review", rateRoute: "/v1/public/rate", setRouteTip: "/v1/public/tip", reportTip: "/v1/public/report-tip" });
 
 function currentUser(uid) {
   if (!sharedAccessEnabled || !auth || !db || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error("Shared spaces are unavailable.");
@@ -112,4 +112,13 @@ export async function readPublicRoutes(uid, cursor = null) {
   currentUser(uid);
   const page = snapshot.docs.slice(0, 24);
   return { routes: page.map((item) => ({ id: item.id, ...item.data() })), cursor: snapshot.size > 24 ? page[page.length - 1] : null };
+}
+
+/** Anonymous tips on a community route, newest first. Needs a verified account.
+ * @param {string} uid @param {string} publicRouteId */
+export async function readRouteTips(uid, publicRouteId) {
+  currentUser(uid);
+  const snapshot = await getDocsFromServer(query(collection(db, "publicRoutes", publicRouteId, "tips"), orderBy("updatedAt", "desc"), limit(20)));
+  currentUser(uid);
+  return snapshot.docs.map((item) => ({ id: item.id, text: item.data().text, updatedAt: item.data().updatedAt?.toMillis?.() ?? 0, reportCount: item.data().reportCount ?? 0 }));
 }

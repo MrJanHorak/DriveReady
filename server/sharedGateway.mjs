@@ -29,7 +29,11 @@ export const ROUTES = Object.freeze({
   "/v1/public/save": { action: "savePublicRoute", fields: ["publicRouteId", "spaceId", "operationId"] },
   "/v1/moderation/status": { action: "moderationStatus", fields: [] },
   "/v1/moderation/reports": { action: "listReportedRoutes", fields: [] },
-  "/v1/moderation/act": { action: "moderatePublicRoute", fields: ["publicRouteId", "action"] },
+  "/v1/moderation/act": { action: "moderatePublicRoute", fields: ["publicRouteId", "action"], optional: ["tipId"] },
+  "/v1/public/my-review": { action: "myRouteReview", fields: ["publicRouteId"] },
+  "/v1/public/rate": { action: "rateRoute", fields: ["publicRouteId", "stars", "difficulty"] },
+  "/v1/public/tip": { action: "setRouteTip", fields: ["publicRouteId", "text"] },
+  "/v1/public/report-tip": { action: "reportTip", fields: ["publicRouteId", "tipId", "reason"] },
 });
 
 function readBody(req) {

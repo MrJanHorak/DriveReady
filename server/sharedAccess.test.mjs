@@ -558,7 +558,7 @@ test("managers publish approved routes without anything that identifies the fami
   assert.equal(created, true);
   assert.deepEqual(await publish(manager), { publicRouteId, created: false }, "publishing twice is harmless");
   const item = (await db.doc(`publicRoutes/${publicRouteId}`).get()).data();
-  assert.deepEqual(Object.keys(item).sort(), ["area", "description", "lengthKm", "line", "name", "practicedConditions", "practicedSkills", "publishedAt", "reportCount"]);
+  assert.deepEqual(Object.keys(item).sort(), ["area", "description", "difficultyTotal", "driveCount", "lengthKm", "line", "name", "practicedConditions", "practicedCount", "practicedSkills", "publishedAt", "ratingCount", "reportCount", "saveCount", "starsTotal", "tipReportCount"]);
   assert.equal(item.name, "Riverside practice loop");
   assert.deepEqual(item.practicedSkills, ["Turns"]);
   const original = decodeRoutePolyline(testRoadPolyline), shared = decodeRoutePolyline(item.line);
@@ -650,4 +650,73 @@ test("published lines stay clear of the start, the end, loops back home and mark
   assert.equal(JSON.stringify(item).includes("33.478,"), false);
   assert.equal(JSON.stringify((await db.doc(`publicRouteSources/${publicRouteId}`).get()).data()).includes("33.478"), false, "private places are not stored");
   assert.equal(Object.hasOwn((await db.doc(`spaces/${spaceId}/routes/${routeId}`).get()).data(), "privatePlaces"), false);
+});
+
+test("community totals count saves, families and drives; only families who drove a route can rate it or leave a tip", async () => {
+  const { manager, supervisor, learner, outsider, spaceId, routeId } = await deletionFixture("reviews");
+  currentTime = Date.now();
+  const { publicRouteId } = await service.publishRoute({ idToken: manager.token, spaceId, routeId, name: "Review loop", area: "Augusta", confirmPrivacy: "yes" });
+  const stats = async () => (await db.doc(`publicRoutes/${publicRouteId}`).get()).data();
+
+  // Another family saves it twice (two learners would be two saves; the same space counts once).
+  const other = await account(`reviews-other-${randomUUID().slice(0, 8)}`);
+  const { spaceId: otherSpace } = await service.createSpace({ idToken: other.token, learnerName: "Reviewing learner" });
+  const copy = randomUUID();
+  await service.savePublicRoute({ idToken: other.token, publicRouteId, spaceId: otherSpace, operationId: copy });
+  await service.savePublicRoute({ idToken: other.token, publicRouteId, spaceId: otherSpace, operationId: randomUUID() });
+  assert.equal((await stats()).saveCount, 1);
+
+  // Before driving it, nobody can review it.
+  assert.equal((await service.myRouteReview({ idToken: other.token, publicRouteId })).canReview, false);
+  await assert.rejects(service.rateRoute({ idToken: other.token, publicRouteId, stars: "5", difficulty: "2" }), /Log a drive/);
+  await assert.rejects(service.setRouteTip({ idToken: other.token, publicRouteId, text: "Hi" }), /Log a drive/);
+
+  // Drives on the saved copy and on the original both count; each family once.
+  const drive = (person, space, route) => service.createDrive({ idToken: person.token, spaceId: space, operationId: randomUUID(), date: "2026-11-05", minutes: "20", nightMinutes: "0", notes: "", supervisorPresentUid: person.uid, routeId: route });
+  const first = await drive(other, otherSpace, copy);
+  await drive(other, otherSpace, copy);
+  await drive(supervisor, spaceId, routeId);
+  let totals = await stats();
+  assert.equal(totals.driveCount, 3);
+  assert.equal(totals.practicedCount, 2);
+  const firstDrive = (await db.doc(`spaces/${otherSpace}/drives/${first.driveId}`).get()).data();
+  assert.equal(firstDrive.countedPublicRouteId, publicRouteId);
+  await service.deleteDrive({ idToken: other.token, spaceId: otherSpace, driveId: first.driveId, expectedRevision: "0" });
+  assert.equal((await stats()).driveCount, 2, "deleting a drive takes it off the count");
+
+  // Ratings: validated, one per account, changeable; totals give the averages.
+  assert.equal((await service.myRouteReview({ idToken: other.token, publicRouteId })).canReview, true);
+  await assert.rejects(service.rateRoute({ idToken: other.token, publicRouteId, stars: "6", difficulty: "2" }), /Invalid rating/);
+  await assert.rejects(service.rateRoute({ idToken: outsider.token, publicRouteId, stars: "4", difficulty: "2" }), /Log a drive/);
+  assert.deepEqual(await service.rateRoute({ idToken: other.token, publicRouteId, stars: "4", difficulty: "2" }), { saved: true, updated: false });
+  assert.deepEqual(await service.rateRoute({ idToken: learner.token, publicRouteId, stars: "5", difficulty: "4" }), { saved: true, updated: false }, "the learner in a family that drove it can rate it");
+  assert.deepEqual(await service.rateRoute({ idToken: other.token, publicRouteId, stars: "3", difficulty: "3" }), { saved: true, updated: true });
+  totals = await stats();
+  assert.equal(totals.ratingCount, 2);
+  assert.equal(totals.starsTotal, 8);
+  assert.equal(totals.difficultyTotal, 7);
+  assert.deepEqual((await service.myRouteReview({ idToken: other.token, publicRouteId })).rating, { stars: 3, difficulty: 3 });
+
+  // Tips: one per account, anonymous, editable, removable; reports reach moderators.
+  await assert.rejects(service.setRouteTip({ idToken: other.token, publicRouteId, text: "x".repeat(281) }), /Invalid tip/);
+  const { tipId } = await service.setRouteTip({ idToken: other.token, publicRouteId, text: "  Go on Sunday mornings; the lot is empty.  " });
+  await service.setRouteTip({ idToken: other.token, publicRouteId, text: "Sunday mornings are quietest." });
+  const tips = await db.collection(`publicRoutes/${publicRouteId}/tips`).get();
+  assert.equal(tips.size, 1);
+  assert.deepEqual(Object.keys(tips.docs[0].data()).sort(), ["createdAt", "reportCount", "text", "updatedAt"]);
+  assert.equal(tips.docs[0].data().text, "Sunday mornings are quietest.");
+  assert.equal(JSON.stringify(tips.docs[0].data()).includes(other.uid), false);
+  assert.equal((await service.myRouteReview({ idToken: other.token, publicRouteId })).tip, "Sunday mornings are quietest.");
+  assert.deepEqual(await service.reportTip({ idToken: outsider.token, publicRouteId, tipId, reason: "inappropriate" }), { reported: true });
+  assert.deepEqual(await service.reportTip({ idToken: outsider.token, publicRouteId, tipId, reason: "inappropriate" }), { reported: false });
+  const mod = await account(`moderator-${randomUUID().slice(0, 8)}`);
+  const listed = (await service.listReportedRoutes({ idToken: mod.token })).routes.find((route) => route.id === publicRouteId);
+  assert.deepEqual(listed.tips.map((tip) => tip.text), ["Sunday mornings are quietest."]);
+  await service.moderatePublicRoute({ idToken: mod.token, publicRouteId, action: "keepTip", tipId });
+  assert.equal((await stats()).tipReportCount, 0);
+  await service.reportTip({ idToken: manager.token, publicRouteId, tipId, reason: "other" });
+  assert.deepEqual(await service.moderatePublicRoute({ idToken: mod.token, publicRouteId, action: "removeTip", tipId }), { removed: true });
+  assert.equal((await db.collection(`publicRoutes/${publicRouteId}/tips`).get()).size, 0);
+  assert.equal((await stats()).tipReportCount, 0);
+  assert.deepEqual(await service.setRouteTip({ idToken: learner.token, publicRouteId, text: "" }), { saved: false, removed: false });
 });
