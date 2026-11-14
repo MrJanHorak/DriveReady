@@ -121,3 +121,26 @@ test("retired single-supervisor records and unknown paths are closed to everyone
   await assertFails(setDoc(doc(ownerDb, "spaces/new-space/members/owner"), { role: "manager", active: true }));
   await assertFails(getDocFromServer(doc(env.unauthenticatedContext().firestore(), "users/owner/learners/l1")));
 });
+
+test("the public route library is readable only by verified accounts; reports and sources stay private", async () => {
+  await env.withSecurityRulesDisabled(async (admin) => {
+    const db = admin.firestore();
+    await setDoc(doc(db, "publicRoutes/pub-1"), { name: "Public loop", area: "Augusta area", reportCount: 1 });
+    await setDoc(doc(db, "publicRoutes/pub-1/reports/someone"), { reason: "unsafe" });
+    await setDoc(doc(db, "publicRouteSources/pub-1"), { spaceId: "space-a", routeId: "route-a" });
+  });
+  const verified = env.authenticatedContext("reader", { email: "reader@example.test", email_verified: true }).firestore();
+  const unverified = env.authenticatedContext("new-user", { email: "new@example.test", email_verified: false }).firestore();
+  const guest = env.unauthenticatedContext().firestore();
+  await assertSucceeds(getDocFromServer(doc(verified, "publicRoutes/pub-1")));
+  await assertSucceeds(getDocs(collection(verified, "publicRoutes")));
+  for (const db of [unverified, guest]) {
+    await assertFails(getDocFromServer(doc(db, "publicRoutes/pub-1")));
+    await assertFails(getDocs(collection(db, "publicRoutes")));
+  }
+  await assertFails(setDoc(doc(verified, "publicRoutes/pub-2"), { name: "Sneaky" }));
+  await assertFails(deleteDoc(doc(verified, "publicRoutes/pub-1")));
+  await assertFails(getDocFromServer(doc(verified, "publicRoutes/pub-1/reports/someone")));
+  await assertFails(getDocs(collection(verified, "publicRoutes/pub-1/reports")));
+  await assertFails(getDocFromServer(doc(verified, "publicRouteSources/pub-1")));
+});

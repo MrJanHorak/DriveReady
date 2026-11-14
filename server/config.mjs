@@ -27,6 +27,15 @@ function positiveInt(value, fallback, name) {
   return Number(value);
 }
 
+// Verified accounts allowed to review reported public routes. Optional.
+function parseModerators(value) {
+  if (value === undefined || !value.trim()) return [];
+  return value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean).map((item) => {
+    if (!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(item)) throw new Error(`MODERATOR_EMAILS entry is not an email address: ${item}`);
+    return item;
+  });
+}
+
 export function loadConfig(env) {
   const projectId = env.FIREBASE_PROJECT_ID?.trim();
   if (!projectId) throw new Error("FIREBASE_PROJECT_ID is required.");
@@ -53,6 +62,7 @@ export function loadConfig(env) {
     host: env.HOST?.trim() || "0.0.0.0",
     trustProxy: env.TRUST_PROXY === "true",
     rateLimitPerMinute: positiveInt(env.RATE_LIMIT_PER_MINUTE, 120, "RATE_LIMIT_PER_MINUTE"),
+    moderatorEmails: parseModerators(env.MODERATOR_EMAILS),
   };
 }
 

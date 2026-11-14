@@ -8,6 +8,7 @@ import { initializeApp, deleteApp } from "firebase/app";
 import { connectAuthEmulator, getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import { connectFirestoreEmulator, doc, getDocFromServer, setDoc } from "firebase/firestore";
 import { createSharedAccessService } from "./sharedAccess.mjs";
+import { encodeRoutePolyline, decodeRoutePolyline } from "../src/app/routePolyline.js";
 
 let adminApp, adminAuth, db, service;
 const clientApps = [];
@@ -20,7 +21,7 @@ before(() => {
   adminApp = initializeAdmin({ projectId: "demo-driveready" }, "shared-access-admin");
   adminAuth = getAdminAuth(adminApp);
   db = getAdminFirestore(adminApp);
-  service = createSharedAccessService({ db, auth: adminAuth, now: () => currentTime });
+  service = createSharedAccessService({ db, auth: adminAuth, now: () => currentTime, isModerator: (email) => email.startsWith("moderator-") });
 });
 after(async () => { await Promise.all(clientApps.map(deleteApp)); if (adminApp) await deleteAdmin(adminApp); });
 
@@ -531,4 +532,99 @@ test("learners can add their own reflection to a drive without changing the reco
   saved = (await db.doc(`spaces/${spaceId}/drives/${driveId}`).get()).data();
   assert.equal(saved.learnerReflection, undefined);
   assert.equal(saved.learnerReflectionAt, undefined);
+});
+
+test("managers publish approved routes without anything that identifies the family; anyone can save or report them", async () => {
+  const { manager, supervisor, learner, outsider, spaceId, routeId } = await deletionFixture("public");
+  currentTime = Date.now();
+  const publish = (person, changes = {}) => service.publishRoute({ idToken: person.token, spaceId, routeId, name: "Riverside practice loop", description: "Quiet roads with a few four-way stops.", area: "North Augusta", practicedSkills: JSON.stringify(["Turns"]), practicedConditions: "", ...changes });
+  for (const person of [supervisor, learner, outsider]) await assert.rejects(publish(person), /Not authorized/);
+  await assert.rejects(publish(manager, { name: "Two\nlines" }), /Invalid public route/);
+  await assert.rejects(publish(manager, { area: "" }), /Invalid public route/);
+
+  // Proposed and too-short routes can't be shared.
+  const proposed = randomUUID();
+  await service.createRoute({ idToken: learner.token, spaceId, operationId: proposed, name: "Idea", start: "A", destination: "B", geometry, roadPolyline: testRoadPolyline });
+  await assert.rejects(service.publishRoute({ idToken: manager.token, spaceId, routeId: proposed, name: "Idea", area: "Augusta" }), /approved route/);
+  const short = randomUUID();
+  const shortLine = encodeRoutePolyline([{ lat: 33.47, lng: -82.01 }, { lat: 33.475, lng: -82.01 }]);
+  await service.createRoute({ idToken: supervisor.token, spaceId, operationId: short, name: "Short", start: "A", destination: "B", geometry, roadPolyline: shortLine });
+  await assert.rejects(service.publishRoute({ idToken: manager.token, spaceId, routeId: short, name: "Short hop", area: "Augusta" }), /too short/);
+
+  const { publicRouteId, created } = await publish(manager);
+  assert.equal(created, true);
+  assert.deepEqual(await publish(manager), { publicRouteId, created: false }, "publishing twice is harmless");
+  const item = (await db.doc(`publicRoutes/${publicRouteId}`).get()).data();
+  assert.deepEqual(Object.keys(item).sort(), ["area", "description", "lengthKm", "line", "name", "practicedConditions", "practicedSkills", "publishedAt", "reportCount"]);
+  assert.equal(item.name, "Riverside practice loop");
+  assert.deepEqual(item.practicedSkills, ["Turns"]);
+  const original = decodeRoutePolyline(testRoadPolyline), shared = decodeRoutePolyline(item.line);
+  assert.notDeepEqual(shared[0], original[0], "the start is trimmed");
+  assert.notDeepEqual(shared.at(-1), original.at(-1), "the end is trimmed");
+  assert.equal(JSON.stringify(item).includes(spaceId), false);
+  assert.equal(JSON.stringify(item).includes("Deletion learner"), false);
+  assert.equal((await db.doc(`publicRouteSources/${publicRouteId}`).get()).data().spaceId, spaceId);
+  assert.equal((await db.doc(`spaces/${spaceId}/routes/${routeId}`).get()).data().publicRouteId, publicRouteId);
+
+  // Another family saves it as an ordinary approved route.
+  const other = await account(`public-other-${randomUUID().slice(0, 8)}`);
+  const { spaceId: otherSpace } = await service.createSpace({ idToken: other.token, learnerName: "Other family learner" });
+  const operationId = randomUUID();
+  await assert.rejects(service.savePublicRoute({ idToken: outsider.token, publicRouteId, spaceId: otherSpace, operationId }), /Not authorized/);
+  assert.deepEqual(await service.savePublicRoute({ idToken: other.token, publicRouteId, spaceId: otherSpace, operationId }), { routeId: operationId, created: true });
+  assert.deepEqual(await service.savePublicRoute({ idToken: other.token, publicRouteId, spaceId: otherSpace, operationId }), { routeId: operationId, created: false });
+  const copy = (await db.doc(`spaces/${otherSpace}/routes/${operationId}`).get()).data();
+  assert.equal(copy.status, "approved");
+  assert.equal(copy.roadPolyline, item.line);
+  assert.ok(copy.geometry.length >= 2 && copy.geometry.length <= 50);
+  assert.equal((await service.createDrive({ idToken: other.token, spaceId: otherSpace, operationId: randomUUID(), date: "2026-11-03", minutes: "25", nightMinutes: "0", notes: "", supervisorPresentUid: other.uid, routeId: operationId })).created, true);
+
+  // Reports: one per account, counted, visible only to moderators.
+  await assert.rejects(service.reportPublicRoute({ idToken: other.token, publicRouteId, reason: "spam" }), /Invalid report/);
+  assert.deepEqual(await service.reportPublicRoute({ idToken: other.token, publicRouteId, reason: "unsafe", note: "Blind corner near the bridge" }), { reported: true });
+  assert.deepEqual(await service.reportPublicRoute({ idToken: other.token, publicRouteId, reason: "unsafe" }), { reported: false });
+  await service.reportPublicRoute({ idToken: outsider.token, publicRouteId, reason: "private" });
+  assert.equal((await db.doc(`publicRoutes/${publicRouteId}`).get()).data().reportCount, 2);
+  const mod = await account(`moderator-${randomUUID().slice(0, 8)}`);
+  assert.deepEqual(await service.moderationStatus({ idToken: mod.token }), { moderator: true });
+  assert.deepEqual(await service.moderationStatus({ idToken: manager.token }), { moderator: false });
+  await assert.rejects(service.listReportedRoutes({ idToken: manager.token }), /Not authorized/);
+  const listed = (await service.listReportedRoutes({ idToken: mod.token })).routes.find((route) => route.id === publicRouteId);
+  assert.equal(listed.reportCount, 2);
+  assert.deepEqual(listed.reports.map((report) => report.reason).sort(), ["private", "unsafe"]);
+  assert.deepEqual(await service.moderatePublicRoute({ idToken: mod.token, publicRouteId, action: "dismiss" }), { dismissed: true });
+  assert.equal((await db.doc(`publicRoutes/${publicRouteId}`).get()).data().reportCount, 0);
+  assert.equal((await db.collection(`publicRoutes/${publicRouteId}/reports`).get()).size, 0);
+
+  // Moderator removal takes it down and clears the family's link to it.
+  await assert.rejects(service.moderatePublicRoute({ idToken: manager.token, publicRouteId, action: "remove" }), /Not authorized/);
+  assert.deepEqual(await service.moderatePublicRoute({ idToken: mod.token, publicRouteId, action: "remove" }), { removed: true });
+  assert.equal((await db.doc(`publicRoutes/${publicRouteId}`).get()).exists, false);
+  assert.equal((await db.doc(`publicRouteSources/${publicRouteId}`).get()).exists, false);
+  assert.equal((await db.doc(`spaces/${spaceId}/routes/${routeId}`).get()).data().publicRouteId, undefined);
+  assert.equal((await db.doc(`spaces/${otherSpace}/routes/${operationId}`).get()).exists, true, "saved copies stay with the families who saved them");
+});
+
+test("unpublishing, deleting the route or deleting the space removes the public copy", async () => {
+  const { manager, supervisor, spaceId, routeId } = await deletionFixture("unpublish");
+  currentTime = Date.now();
+  const publish = (id) => service.publishRoute({ idToken: manager.token, spaceId, routeId: id, name: "Shared loop", area: "Augusta" });
+  const first = (await publish(routeId)).publicRouteId;
+  await assert.rejects(service.unpublishRoute({ idToken: supervisor.token, spaceId, routeId }), /Not authorized/);
+  assert.deepEqual(await service.unpublishRoute({ idToken: manager.token, spaceId, routeId }), { unpublished: true });
+  assert.equal((await db.doc(`publicRoutes/${first}`).get()).exists, false);
+  assert.deepEqual(await service.unpublishRoute({ idToken: manager.token, spaceId, routeId }), { unpublished: false });
+
+  const second = (await publish(routeId)).publicRouteId;
+  assert.notEqual(second, first);
+  await service.deleteRoute({ idToken: manager.token, spaceId, routeId });
+  assert.equal((await db.doc(`publicRoutes/${second}`).get()).exists, false);
+  assert.equal((await db.doc(`publicRouteSources/${second}`).get()).exists, false);
+
+  const another = randomUUID();
+  await service.createRoute({ idToken: supervisor.token, spaceId, operationId: another, name: "Another", start: "A", destination: "B", geometry, roadPolyline: testRoadPolyline });
+  const third = (await publish(another)).publicRouteId;
+  await service.deleteSpace({ idToken: manager.token, spaceId, confirmName: "Deletion learner" });
+  assert.equal((await db.doc(`publicRoutes/${third}`).get()).exists, false);
+  assert.equal((await db.doc(`publicRouteSources/${third}`).get()).exists, false);
 });

@@ -2,7 +2,8 @@
 // Callers must never supply the Admin SDK instances or clock over a network API.
 import { createHash, randomBytes } from "node:crypto";
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
-import { decodeRoutePolyline } from "../src/app/routePolyline.js";
+import { decodeRoutePolyline, encodeRoutePolyline } from "../src/app/routePolyline.js";
+import { lineLengthM, samplePoints, trimLine } from "../src/app/publicLine.js";
 import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "../src/app/practiceData.js";
 
 const INVITATION_LIFETIME_MS = 48 * 60 * 60 * 1000;
@@ -58,7 +59,11 @@ function routeGeometry(value) {
 // Routes saved before approval existed have no status and count as approved.
 const routeApproved = (route) => route.status === undefined || route.status === "approved";
 
-export function createSharedAccessService({ db, auth, now = Date.now }) {
+const REPORT_REASONS = ["unsafe", "private", "inaccurate", "inappropriate", "other"];
+const oneLine = (value, min, max) => typeof value === "string" && value.trim().length >= min && value.length <= max && !/[\r\n\u2028\u2029\u0000-\u001f]/.test(value);
+
+// isModerator(email) decides who may review reported public routes (MODERATOR_EMAILS).
+export function createSharedAccessService({ db, auth, now = Date.now, isModerator = () => false }) {
   async function identity(idToken) {
     try {
       if (typeof idToken !== "string" || !idToken) throw unauthorized();
@@ -326,8 +331,8 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       if (!routeSnap.exists) return { deleted: false };
       if (!((actor.role === "manager" && caller.uid === spaceSnap.data().managerUid) || routeSnap.data().createdByUid === caller.uid)) throw unauthorized();
       tx.delete(route);
-      return { deleted: true };
-    });
+      return { deleted: true, publicRouteId: routeSnap.data().publicRouteId };
+    }).then(async ({ publicRouteId, ...result }) => { if (publicRouteId) await removePublic(publicRouteId); return result; });
   }
 
   // A supervisor or learner may leave a space. Like removal by the manager, this
@@ -371,6 +376,8 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
     const writer = db.bulkWriter();
     for (const doc of members.docs) writer.delete(db.collection("users").doc(doc.id).collection("spaceLinks").doc(space.id));
     await writer.close();
+    const published = await db.collection("publicRouteSources").where("spaceId", "==", space.id).get();
+    for (const source of published.docs) await removePublic(source.id);
     await db.recursiveDelete(space);
     return { deleted: true };
   }
@@ -449,5 +456,133 @@ export function createSharedAccessService({ db, auth, now = Date.now }) {
       return { saved: true };
     });
   }
-  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive, deleteDrive, deleteRoute, leaveSpace, deleteSpace, deleteAccount, reviewRoute, setReflection };
+  // ---- Public route library -------------------------------------------------
+  // A published route is copied to publicRoutes/{id} with no learner name, space,
+  // member or start/destination text, and with ~300 m cut from both ends of the line.
+  // publicRouteSources/{id} (server-only) remembers where it came from.
+  async function removePublic(publicRouteId) {
+    await db.recursiveDelete(db.collection("publicRoutes").doc(publicRouteId));
+    await db.collection("publicRouteSources").doc(publicRouteId).delete();
+  }
+
+  async function publishRoute({ idToken, spaceId, routeId, name, description = "", area, practicedSkills, practicedConditions }) {
+    const caller = await identity(idToken);
+    if (!oneLine(name, 3, 80) || !oneLine(area, 2, 60) || typeof description !== "string" || description.length > 300 || /[\u0000-\u0008\u000b-\u001f]/.test(description)) throw new Error("Invalid public route details.");
+    const skills = practiceTags(practicedSkills, PRACTICE_SKILLS), conditions = practiceTags(practicedConditions, PRACTICE_CONDITIONS);
+    const { space, member } = refs(spaceId, caller.uid);
+    const route = space.collection("routes").doc(checkId(routeId));
+    return db.runTransaction(async (tx) => {
+      const [spaceSnap, managerSnap, routeSnap] = await tx.getAll(space, member, route);
+      if (!isManager(spaceSnap, managerSnap) || spaceSnap.data().managerUid !== caller.uid || !routeSnap.exists) throw unauthorized();
+      const data = routeSnap.data();
+      if (data.publicRouteId) {
+        const existing = await tx.get(db.collection("publicRoutes").doc(data.publicRouteId));
+        if (existing.exists) return { publicRouteId: data.publicRouteId, created: false };
+      }
+      if (!routeApproved(data)) throw new Error("Only an approved route can be shared.");
+      if (!data.roadPolyline) throw new Error("Only a route that follows roads can be shared.");
+      const trimmed = trimLine(decodeRoutePolyline(data.roadPolyline));
+      if (!trimmed) throw new Error("This route is too short to share without showing where it starts and ends.");
+      const line = samplePoints(trimmed, 1000);
+      const publicRef = db.collection("publicRoutes").doc();
+      tx.create(publicRef, { name: name.trim(), description: description.trim(), area: area.trim(), practicedSkills: skills, practicedConditions: conditions, line: encodeRoutePolyline(line), lengthKm: Math.round(lineLengthM(line) / 100) / 10, reportCount: 0, publishedAt: FieldValue.serverTimestamp() });
+      tx.create(db.collection("publicRouteSources").doc(publicRef.id), { spaceId: space.id, routeId: route.id, publishedByUid: caller.uid, publishedAt: FieldValue.serverTimestamp() });
+      tx.update(route, { publicRouteId: publicRef.id });
+      return { publicRouteId: publicRef.id, created: true };
+    });
+  }
+
+  async function unpublishRoute({ idToken, spaceId, routeId }) {
+    const caller = await identity(idToken);
+    const { space, member } = refs(spaceId, caller.uid);
+    const route = space.collection("routes").doc(checkId(routeId));
+    const publicRouteId = await db.runTransaction(async (tx) => {
+      const [spaceSnap, managerSnap, routeSnap] = await tx.getAll(space, member, route);
+      if (!isManager(spaceSnap, managerSnap) || spaceSnap.data().managerUid !== caller.uid || !routeSnap.exists) throw unauthorized();
+      const id = routeSnap.data().publicRouteId;
+      if (id) tx.update(route, { publicRouteId: FieldValue.delete() });
+      return id;
+    });
+    if (publicRouteId) await removePublic(publicRouteId);
+    return { unpublished: !!publicRouteId };
+  }
+
+  async function reportPublicRoute({ idToken, publicRouteId, reason, note = "" }) {
+    const caller = await identity(idToken);
+    if (!REPORT_REASONS.includes(reason) || typeof note !== "string" || note.length > 300 || /[\u0000-\u0008\u000b-\u001f]/.test(note)) throw new Error("Invalid report.");
+    const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
+    const report = publicRef.collection("reports").doc(caller.uid);
+    return db.runTransaction(async (tx) => {
+      const [publicSnap, reportSnap] = await tx.getAll(publicRef, report);
+      if (!publicSnap.exists) throw unauthorized();
+      if (reportSnap.exists) return { reported: false };
+      tx.create(report, { reason, note: note.trim(), createdAt: FieldValue.serverTimestamp() });
+      tx.update(publicRef, { reportCount: FieldValue.increment(1) });
+      return { reported: true };
+    });
+  }
+
+  // A manager or supervisor copies a public route into a learner's space, where it is
+  // an ordinary approved route. The operation ID makes retries safe.
+  async function savePublicRoute({ idToken, publicRouteId, spaceId, operationId }) {
+    const caller = await identity(idToken);
+    if (typeof operationId !== "string" || !operationIdPattern.test(operationId)) throw new Error("Invalid route details.");
+    const { space, member } = refs(spaceId, caller.uid);
+    const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
+    const route = space.collection("routes").doc(operationId);
+    return db.runTransaction(async (tx) => {
+      const [spaceSnap, actorSnap, publicSnap, existing] = await tx.getAll(space, member, publicRef, route);
+      const actor = actorSnap.data();
+      if (!spaceSnap.exists || spaceSnap.data().status !== "active" || !actorSnap.exists || actor.active !== true || !["manager", "supervisor"].includes(actor.role) || (actor.role === "manager" && caller.uid !== spaceSnap.data().managerUid)) throw unauthorized();
+      if (existing.exists) {
+        if (existing.data().createdByUid !== caller.uid || existing.data().sourcePublicRouteId !== publicRef.id) throw new Error("Route operation conflicts with an existing record.");
+        return { routeId: route.id, created: false };
+      }
+      if (!publicSnap.exists) throw new Error("This public route is no longer available.");
+      const item = publicSnap.data();
+      const line = decodeRoutePolyline(item.line);
+      tx.create(route, { name: item.name, start: "Community route", destination: item.area, geometry: samplePoints(line, 50).map(({ lat, lng }) => ({ lat, lng })), roadPolyline: item.line, createdByUid: caller.uid, status: "approved", sourcePublicRouteId: publicRef.id, createdAt: FieldValue.serverTimestamp() });
+      return { routeId: route.id, created: true };
+    });
+  }
+
+  async function moderator(idToken) {
+    const caller = await identity(idToken);
+    if (!isModerator(caller.email)) throw unauthorized();
+    return caller;
+  }
+  async function moderationStatus({ idToken }) {
+    const caller = await identity(idToken);
+    return { moderator: !!isModerator(caller.email) };
+  }
+  async function listReportedRoutes({ idToken }) {
+    await moderator(idToken);
+    const reported = await db.collection("publicRoutes").where("reportCount", ">", 0).orderBy("reportCount", "desc").limit(50).get();
+    const routes = await Promise.all(reported.docs.map(async (item) => {
+      const reports = await item.ref.collection("reports").orderBy("createdAt", "desc").limit(20).get();
+      return { id: item.id, name: item.data().name, area: item.data().area, reportCount: item.data().reportCount, reports: reports.docs.map((report) => ({ reason: report.data().reason, note: report.data().note ?? "", createdAt: report.data().createdAt?.toMillis?.() ?? 0 })) };
+    }));
+    return { routes };
+  }
+  async function moderatePublicRoute({ idToken, publicRouteId, action }) {
+    await moderator(idToken);
+    if (!["remove", "dismiss"].includes(action)) throw new Error("Invalid moderation action.");
+    const publicRef = db.collection("publicRoutes").doc(checkId(publicRouteId));
+    if (action === "dismiss") {
+      const reports = await publicRef.collection("reports").get();
+      const writer = db.bulkWriter();
+      for (const report of reports.docs) writer.delete(report.ref);
+      await writer.close();
+      if ((await publicRef.get()).exists) await publicRef.update({ reportCount: 0 });
+      return { dismissed: true };
+    }
+    const source = await db.collection("publicRouteSources").doc(publicRef.id).get();
+    if (source.exists) {
+      const routeRef = db.collection("spaces").doc(source.data().spaceId).collection("routes").doc(source.data().routeId);
+      await db.runTransaction(async (tx) => { const snap = await tx.get(routeRef); if (snap.exists && snap.data().publicRouteId === publicRef.id) tx.update(routeRef, { publicRouteId: FieldValue.delete() }); });
+    }
+    await removePublic(publicRef.id);
+    return { removed: true };
+  }
+  return { createSpace, createInvitation, previewInvitation, acceptInvitation, cancelInvitation, listInvitations, cancelInvitationById, removeMember, createDrive, createRoute, editDrive, deleteDrive, deleteRoute, leaveSpace, deleteSpace, deleteAccount, reviewRoute, setReflection, publishRoute, unpublishRoute, reportPublicRoute, savePublicRoute, moderationStatus, listReportedRoutes, moderatePublicRoute };
 }

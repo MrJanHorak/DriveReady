@@ -47,3 +47,10 @@ test("client address uses the proxy-added forwarded entry only when trusted", ()
   assert.equal(clientAddress(req, true), "198.51.100.7");
   assert.equal(clientAddress({ headers: {}, socket: { remoteAddress: "10.0.0.2" } }, true), "10.0.0.2");
 });
+
+test("moderator emails are optional, trimmed and lower-cased", () => {
+  const base = { FIREBASE_PROJECT_ID: "driveready-test", ALLOWED_ORIGINS: "https://app.example.test" };
+  assert.deepEqual(loadConfig(base).moderatorEmails, []);
+  assert.deepEqual(loadConfig({ ...base, MODERATOR_EMAILS: " Owner@Example.test , team@example.test " }).moderatorEmails, ["owner@example.test", "team@example.test"]);
+  assert.throws(() => loadConfig({ ...base, MODERATOR_EMAILS: "not-an-email" }), /MODERATOR_EMAILS/);
+});

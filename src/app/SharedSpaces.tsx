@@ -3,6 +3,7 @@ import { readSharedMembers, readSharedSpaces, sharedAccessRequest, sharedAccessD
 import SharedPractice from "./SharedPractice";
 import SharedRoutes from "./SharedRoutes";
 import SharedDashboard from "./SharedDashboard";
+import CommunityRoutes from "./CommunityRoutes";
 import type { TimerDraft } from "./DriveTimer";
 import { Copy, Link2, Plus, RefreshCw, Share2 } from "lucide-react";
 import { Badge, Card, CardHeader, dangerButton, ghostButton, heading, mono, primaryButton } from "./design";
@@ -147,11 +148,12 @@ export default function SharedSpaces({ uid, verified, disabled, onBusyChange, pa
     <h3 className="sr-only">{sharedAccessDemo ? "Shared spaces · local emulator only" : "Shared spaces"}</h3>
     {!verified && <p className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{sharedAccessDemo ? "Verify your email in the emulator to use this test." : "Verify your email under Account to add learners or accept invitations."}</p>}
     {status && <p role="status" className="mb-3 rounded-lg bg-[#E4EFF2] p-3 text-sm text-[#095969]">{status}</p>}
-    {page !== "shared" && <div className="mb-3 flex items-center justify-end gap-2 text-xs" hidden={onDashboard && spaces.length > 0}><button type="button" disabled={busy || disabled || !verified} className={button} onClick={() => { setStatus(""); void refresh(); void refreshMembers(); void refreshInvitations(); }}>Refresh spaces</button><span className="text-sm">{spaces.length} {spaces.length === 1 ? "space" : "spaces"}</span></div>}
-    {spaces.length === 0 && page !== "shared" && <p className="mt-3 text-sm">Add a learner in <button type="button" className="text-[#0C7A8D] underline" onClick={() => onNavigate("shared")}>People &amp; access</button> to get started.</p>}
+    {page !== "shared" && page !== "community" && <div className="mb-3 flex items-center justify-end gap-2 text-xs" hidden={onDashboard && spaces.length > 0}><button type="button" disabled={busy || disabled || !verified} className={button} onClick={() => { setStatus(""); void refresh(); void refreshMembers(); void refreshInvitations(); }}>Refresh spaces</button><span className="text-sm">{spaces.length} {spaces.length === 1 ? "space" : "spaces"}</span></div>}
+    {spaces.length === 0 && page !== "shared" && page !== "community" && <p className="mt-3 text-sm">Add a learner in <button type="button" className="text-[#0C7A8D] underline" onClick={() => onNavigate("shared")}>People &amp; access</button> to get started.</p>}
     {onDashboard && <SharedDashboard uid={uid} spaces={spaces} blocked={blocked} onNavigate={onNavigate} preferredSpace={dashboardSpace} onSelect={setDashboardSpace} onLogDrive={(spaceId, draft) => { setLogRequest({ spaceId, nonce: crypto.randomUUID(), draft }); onNavigate("logs"); }} />}
     <div hidden={page !== "logs"}><SharedPractice uid={uid} spaces={spaces} blocked={blocked} run={run} createdRoute={createdRoute} logRequest={logRequest} visible={page === "logs"} routesVersion={routesVersion} onCreateRoute={(spaceId) => { onNavigate("routes"); setRouteRequest({ spaceId, nonce: crypto.randomUUID() }); }} /></div>
     <div hidden={page !== "routes"}><SharedRoutes uid={uid} spaces={spaces} blocked={blocked} run={run} createRequest={routeRequest} activePage={page === "routes"} onDeleted={() => setRoutesVersion((value) => value + 1)} onCreated={(spaceId, routeId) => { setRoutesVersion((value) => value + 1); if (routeRequest?.spaceId === spaceId) { setCreatedRoute({ spaceId, routeId, nonce: crypto.randomUUID() }); setRouteRequest(null); onNavigate("logs"); } }} /></div>
+    <div hidden={page !== "community"}><CommunityRoutes uid={uid} spaces={spaces} blocked={blocked} run={run} active={page === "community"} onSaved={() => setRoutesVersion((value) => value + 1)} /></div>
     {page === "shared" && <div className="space-y-5">
     {invite && <div className="rounded-2xl border border-[#0C7A8D]/30 bg-[#E4EFF2] p-5 text-sm text-[#095969]" role="region" aria-label="Invitation">
       {!verified ? <><p><strong>You’ve been invited to a learner’s space.</strong> Verify your email under Account first, then come back here to review the invitation.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" className={ghostButton} onClick={() => onNavigate("account")}>Go to Account</button><button type="button" className={ghostButton} onClick={() => savePendingInvite(null)}>Dismiss</button></div></>

@@ -18,3 +18,5 @@ TRUST_PROXY=true
 
 # Optional: requests per minute per client address (default 120). PORT is set by the host.
 # RATE_LIMIT_PER_MINUTE=120
+# Who may review reported community routes (comma-separated, verified emails)
+# MODERATOR_EMAILS=driveready.team@example.com

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ClipboardList, FileText, LayoutDashboard, Map, Navigation, Shield, UserCircle2, Users } from "lucide-react";
+import { ClipboardList, FileText, Globe2, LayoutDashboard, Map, Navigation, Shield, UserCircle2, Users } from "lucide-react";
 import Workspace from "./Workspace";
 import StateRequirements from "./StateRequirements";
 import Privacy from "./Privacy";
@@ -10,6 +10,7 @@ import { heading, mono } from "./design";
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={17} /> },
   { id: "routes", label: "Routes", icon: <Map size={17} /> },
+  { id: "community", label: "Community", icon: <Globe2 size={17} /> },
   { id: "logs", label: "Driving Logs", icon: <FileText size={17} /> },
   { id: "requirements", label: "State Requirements", icon: <ClipboardList size={17} /> },
   { id: "shared", label: "People & access", icon: <Users size={17} /> },

@@ -24,3 +24,19 @@ export function decodeRoutePolyline(encoded) {
   if (points.length < 2 || points.every((point) => point.lat === points[0].lat && point.lng === points[0].lng)) throw new Error("Invalid route line.");
   return points;
 }
+
+// Encode points as an OSRM/Google precision-5 polyline.
+export function encodeRoutePolyline(points) {
+  let lastLat = 0, lastLng = 0, out = "";
+  const write = (value) => {
+    let v = value < 0 ? ~(value * 2) : value * 2;
+    while (v >= 32) { out += String.fromCharCode((32 | (v & 31)) + 63); v = Math.floor(v / 32); }
+    out += String.fromCharCode(v + 63);
+  };
+  for (const point of points) {
+    const lat = Math.round(point.lat * 1e5), lng = Math.round(point.lng * 1e5);
+    write(lat - lastLat); write(lng - lastLng);
+    lastLat = lat; lastLng = lng;
+  }
+  return out;
+}

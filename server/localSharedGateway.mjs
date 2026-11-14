@@ -12,7 +12,8 @@ export function createLocalSharedGateway({ db, auth, origin = DEFAULT_ORIGIN }) 
     throw new Error("Local demo Auth and Firestore emulators are required.");
   }
   return createSharedGateway({
-    service: createSharedAccessService({ db, auth }),
+    // Demo moderators: the fictional manager, plus moderator@… test accounts.
+    service: createSharedAccessService({ db, auth, isModerator: (email) => email === "manager@example.test" || /^moderator(-[a-z0-9-]+)?@example\.test$/.test(email) }),
     allowedOrigins: [origin],
     acceptConnection: (req) => ["127.0.0.1", "::ffff:127.0.0.1"].includes(req.socket.localAddress),
   });

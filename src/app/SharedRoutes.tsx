@@ -5,7 +5,9 @@ import RouteMap, { type RoutePoint } from "./RouteMap";
 import { decodeRoutePolyline } from "./routePolyline";
 import { followRoads } from "./followRoads";
 import { routeStatus } from "./routeStatus";
-import { ChevronDown, Map as MapIcon, Navigation, Plus, RefreshCw } from "lucide-react";
+import { PracticeChoices } from "./PracticeChoices";
+import { PRACTICE_CONDITIONS, PRACTICE_SKILLS } from "./practiceData";
+import { ChevronDown, Globe2, Map as MapIcon, Navigation, Plus, RefreshCw } from "lucide-react";
 import { Badge, Card, CardHeader, RouteSketch, dangerButton, ghostButton, heading, mono, primaryButton } from "./design";
 
 function StatusBadge({ status }: { status: string }) {
@@ -15,7 +17,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 type Space = { id: string; learnerName: string; role: string };
-type Route = { id: string; name: string; start: string; destination: string; geometry?: RoutePoint[]; roadPolyline?: string; createdByUid?: string; status?: string; declineReason?: string };
+type Route = { id: string; name: string; start: string; destination: string; geometry?: RoutePoint[]; roadPolyline?: string; createdByUid?: string; status?: string; declineReason?: string; publicRouteId?: string };
 type Draft = { spaceId: string; operationId: string; name: string; start: string; destination: string; geometry: string; roadPolyline: string };
 const field = "w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm font-normal outline-none transition-all focus:border-[#0C7A8D] focus:ring-2 focus:ring-[#0C7A8D]/15";
 const button = "rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50";
@@ -91,6 +93,7 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
   const isManager = space?.role === "manager";
   const awaiting = routes.filter((route) => routeStatus(route) === "proposed");
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [sharing, setSharing] = useState<{ routeId: string; name: string; area: string; description: string; skills: string[]; conditions: string[] } | null>(null);
   function changePoints(update: (existing: RoutePoint[]) => RoutePoint[], announce = true) {
     routeRequestVersion.current += 1; routeRequest.current?.abort(); routeRequest.current = null;
     setRouting(false); setRoadPolyline(""); setRoutingMessage(announce && (roadPolyline || routing) ? "Points changed. Find roads again before saving." : ""); setPoints(update);
@@ -146,6 +149,28 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
       if (alive.current) setMessage(decision === "approve" ? `“${route.name}” approved. It can now be used to log drives.` : `“${route.name}” was not approved. The learner can see your reason.`);
     });
   }
+  function publish(route: Route) {
+    if (!sharing || sharing.routeId !== route.id || blocked || pending) return;
+    const form = sharing;
+    setMessage("");
+    void run(async () => {
+      await sharedAccessRequest(uid, "publishRoute", { spaceId: selected, routeId: route.id, name: form.name.trim(), area: form.area.trim(), description: form.description.trim(), practicedSkills: JSON.stringify(form.skills), practicedConditions: JSON.stringify(form.conditions) });
+      if (!alive.current) return;
+      setSharing(null);
+      await refresh();
+      if (alive.current) setMessage(`“${form.name.trim()}” is now in the community library.`);
+    });
+  }
+  function unpublish(route: Route) {
+    if (blocked || pending || !window.confirm(`Stop sharing “${route.name}”? It will disappear from the community library. Families who already saved it keep their copy.`)) return;
+    setMessage("");
+    void run(async () => {
+      await sharedAccessRequest(uid, "unpublishRoute", { spaceId: selected, routeId: route.id });
+      if (!alive.current) return;
+      await refresh();
+      if (alive.current) setMessage(`“${route.name}” is no longer shared.`);
+    });
+  }
   const activeRoute = routes.find((route) => route.id === activeId) ?? routes[0];
   const activePath = useMemo(() => { try { return activeRoute?.roadPolyline ? decodeRoutePolyline(activeRoute.roadPolyline) : undefined; } catch { return undefined; } }, [activeRoute?.roadPolyline]);
   const activePoints = Array.isArray(activeRoute?.geometry) && activeRoute.geometry.length >= 2 ? activeRoute.geometry : null;
@@ -171,7 +196,7 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
           return <li key={route.id}><details className={`group rounded-xl border transition-all duration-150 ${isActive ? "border-[#0C7A8D]/40 bg-[#F4FAFB] shadow-[inset_3px_0_0_#0C7A8D]" : "border-border hover:border-[#0C7A8D]/25 hover:bg-muted/40"}`} onToggle={(event) => { if (event.currentTarget.open) setActiveId(route.id); }}>
             <summary className="flex cursor-pointer list-none items-start gap-3 p-3 [&::-webkit-details-marker]:hidden" onClick={() => setActiveId(route.id)}>
               <RouteSketch geometry={route.geometry} roadPolyline={route.roadPolyline} width={72} height={52} label={`${route.name} route shape`} />
-              <span className="min-w-0 flex-1"><strong className="block break-words text-sm text-foreground" style={heading}>{route.name}</strong><span className="mt-0.5 block break-words text-xs text-muted-foreground">{route.start} → {route.destination}</span><span className="mt-1.5 flex flex-wrap gap-1"><span className="inline-block rounded-md border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground" style={mono}>{route.roadPolyline ? "Follows roads" : Array.isArray(route.geometry) ? "Drawn points" : "No map"}</span><StatusBadge status={routeStatus(route)} /></span></span>
+              <span className="min-w-0 flex-1"><strong className="block break-words text-sm text-foreground" style={heading}>{route.name}</strong><span className="mt-0.5 block break-words text-xs text-muted-foreground">{route.start} → {route.destination}</span><span className="mt-1.5 flex flex-wrap gap-1"><span className="inline-block rounded-md border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground" style={mono}>{route.roadPolyline ? "Follows roads" : Array.isArray(route.geometry) ? "Drawn points" : "No map"}</span><StatusBadge status={routeStatus(route)} />{route.publicRouteId && <span className="inline-flex items-center gap-1 rounded-md border border-[#0C7A8D]/20 bg-[#E4EFF2] px-1.5 py-0.5 text-[10px] font-semibold text-[#0C7A8D]" style={mono}><Globe2 size={10} aria-hidden="true" />Shared publicly</span>}</span></span>
               <ChevronDown size={16} className="mt-1 flex-shrink-0 text-[#0C7A8D] transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>
             <div className="space-y-1.5 border-t border-border px-3 py-2.5 text-xs">
@@ -184,6 +209,21 @@ export default function SharedRoutes({ uid, spaces, blocked, run, createRequest,
                 {routeStatus(route) === "proposed" && <><label className="block font-medium">Reason if declining <span className="font-normal text-muted-foreground">(optional, the learner sees it)</span><input className={`${field} mt-1`} maxLength={300} value={reasons[route.id] ?? ""} disabled={blocked || !!pending} onChange={(event) => setReasons((current) => ({ ...current, [route.id]: event.target.value }))} /></label>
                 <button type="button" className={dangerButton} disabled={blocked || !!pending} onClick={() => reviewRoute(route, "decline")}>Decline route</button></>}
               </div>}
+              {isManager && routeStatus(route) === "approved" && route.roadPolyline && (route.publicRouteId
+                ? <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[#E4EFF2] p-2 text-[#095969]"><Globe2 size={13} aria-hidden="true" /><span className="flex-1">Shared in the community library, without names or exact start and end points.</span><button type="button" className={ghostButton} disabled={blocked || !!pending} onClick={() => unpublish(route)}>Stop sharing</button></div>
+                : sharing?.routeId === route.id
+                  ? <form className="space-y-3 rounded-xl border border-[#0C7A8D]/30 bg-[#F4FAFB] p-3" aria-label="Share with the community" onSubmit={(event) => { event.preventDefault(); publish(route); }}>
+                    <p className="text-sm font-bold" style={heading}>Share with the community</p>
+                    <ul className="list-disc space-y-0.5 pl-4 text-muted-foreground"><li>Any signed-in DriveReady family can see and save it.</li><li>{space?.learnerName}’s name, the start and destination descriptions and about 300 m at each end are left out.</li><li>You can stop sharing at any time.</li></ul>
+                    <label className="block font-medium">Public name<input className={`${field} mt-1`} maxLength={80} required value={sharing.name} onChange={(event) => setSharing({ ...sharing, name: event.target.value })} /></label>
+                    <p className="-mt-2 text-[11px] text-muted-foreground">Avoid names like “Home to school”; describe the roads instead.</p>
+                    <label className="block font-medium">General area<input className={`${field} mt-1`} maxLength={60} required placeholder="e.g. North Augusta" value={sharing.area} onChange={(event) => setSharing({ ...sharing, area: event.target.value })} /></label>
+                    <label className="block font-medium">What’s it good for? <span className="font-normal text-muted-foreground">(optional)</span><textarea className={`${field} mt-1 min-h-16`} maxLength={300} value={sharing.description} onChange={(event) => setSharing({ ...sharing, description: event.target.value })} /></label>
+                    <PracticeChoices compact legend="Skills" choices={PRACTICE_SKILLS} selected={sharing.skills} onChange={(skills) => setSharing({ ...sharing, skills })} />
+                    <PracticeChoices compact legend="Conditions" choices={PRACTICE_CONDITIONS} selected={sharing.conditions} onChange={(conditions) => setSharing({ ...sharing, conditions })} />
+                    <div className="flex flex-wrap gap-2"><button className={primaryButton} disabled={blocked || !!pending}><Globe2 size={14} aria-hidden="true" />Share publicly</button><button type="button" className={ghostButton} onClick={() => setSharing(null)}>Cancel</button></div>
+                  </form>
+                  : <button type="button" className={ghostButton} disabled={blocked || !!pending} onClick={() => setSharing({ routeId: route.id, name: route.name, area: "", description: "", skills: [], conditions: [] })}><Globe2 size={13} aria-hidden="true" />Share with the community…</button>)}
               {(space?.role === "manager" || route.createdByUid === uid) && <button type="button" className={`${dangerButton} mt-1`} disabled={blocked || !!pending} onClick={() => removeRoute(route)}>Delete route</button>}
             </div>
           </details></li>;

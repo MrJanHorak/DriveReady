@@ -31,6 +31,11 @@ service cloud.firestore {
         allow read: if activeMember(spaceId);
       }
     }
+    // The public route library: readable by any signed-in account with a verified
+    // email, never by anonymous visitors. Its reports and source records stay server-only.
+    match /publicRoutes/{publicRouteId} {
+      allow read: if request.auth != null && request.auth.token.email_verified == true;
+    }
     // Everything else, including the retired single-supervisor records under
     // users/{uid}/learners and users/{uid}/drives, is denied.
   }

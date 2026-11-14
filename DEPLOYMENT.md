@@ -43,6 +43,7 @@ The service is one Node process with no framework. It runs on any Node 22+ host 
 | `ALLOWED_ORIGINS` | Yes | `http://localhost:5173` for `npm run dev`, plus your deployed web app, e.g. `https://driveready.vercel.app`. Comma-separated, exact origins, no trailing slash. Only `localhost`/`127.0.0.1` may use http. |
 | `TRUST_PROXY` | Recommended | `true` on Railway, Render or Cloud Run, so rate limiting sees the real client address |
 | `RATE_LIMIT_PER_MINUTE` | No | Requests per minute per client address; default `120` |
+| `MODERATOR_EMAILS` | Recommended | Comma-separated verified emails allowed to review reported community routes (for example the project inbox). Without it, reports are stored but nobody can review them in the app. |
 | `PORT`, `HOST` | No | Set by the host; defaults `8080`, `0.0.0.0` |
 
 The service refuses to start if a setting is missing or unsafe: a `demo-` project, emulator variables, a key for a different project, or a non-https origin.

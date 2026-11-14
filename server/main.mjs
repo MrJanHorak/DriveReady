@@ -20,7 +20,7 @@ const app = initializeApp({
   ...(config.usesEmulators ? {} : { credential: config.serviceAccount ? cert(config.serviceAccount) : applicationDefault() }),
 });
 const handler = createSharedGateway({
-  service: createSharedAccessService({ db: getFirestore(app), auth: getAuth(app) }),
+  service: createSharedAccessService({ db: getFirestore(app), auth: getAuth(app), isModerator: (email) => config.moderatorEmails.includes(email) }),
   allowedOrigins: config.allowedOrigins,
   clientKey: (req) => clientAddress(req, config.trustProxy),
   allow: createRateLimiter({ limit: config.rateLimitPerMinute }),

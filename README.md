@@ -16,6 +16,7 @@ It is a working prototype. Use fictional data only: security and privacy review 
 - **Night minutes:** give a drive a start time (the timer fills it in) and the form suggests how many minutes fell after sunset or before sunrise, at the route's start point or the Augusta area, and fills them in. Georgia DDS doesn't define "night", so the suggestion can always be changed.
 - **Printable practice log:** **Print log** on Driving Logs previews a one-learner log (every drive in date order with route, duration, night minutes, skills, supervisor and notes; totals against Georgia's 40/6; signature lines) and prints it or saves it as PDF through the browser. It is a personal record, not an official DDS form.
 - **Learners take part:** learners can suggest routes, which the managing supervisor approves (or declines with a reason) before anyone can log a drive on them, and can add their own reflection to each drive.
+- **Community route library:** a managing supervisor can share an approved route with other DriveReady families. The public copy has no learner name, no start or destination text, and about 300 m trimmed from each end. Signed-in families browse it on the **Community** page, filter by skill, save routes to their learner, and report problems; moderators (set with `MODERATOR_EMAILS`) review reports.
 - **Deleting and leaving:** delete drives and routes you're allowed to edit; supervisors and learners can leave a space; the managing supervisor can delete a learner's whole space after typing the learner's name. Anyone can delete their own account under **Account** after confirming their email and password; managers delete their learner spaces first.
 - **Privacy notice:** the **Privacy** page explains in plain language what is stored, who can see it and which outside services are involved.
 - **State requirements:** a sourced Georgia DDS overview with links. Other states are not covered yet.
@@ -63,8 +64,9 @@ The demo seeds one learner ("Alex Example"), a road-following route and a few ta
 1. **Dashboard:** switch learners and check progress, recent drives and coverage. **Log a drive** opens the drive form for that learner.
 2. **Routes:** click a saved route to see it on the large map. Under **Create a route**, click the map to add points, select **Follow roads**, review the line, name it and save.
 3. **Driving Logs:** log a drive against a saved route and tick the skills and conditions practised.
-4. **People & access:** add another fictional learner, invite someone, or remove a member.
-5. **Account:** sign out and sign in as the learner (read-only) or the invited supervisor.
+4. **Community:** open a saved route under **Routes** as the manager, choose **Share with the community…**, then browse it on **Community**. `manager@example.test` is also the demo moderator, so reports appear there too.
+5. **People & access:** add another fictional learner, invite someone, or remove a member.
+6. **Account:** sign out and sign in as the learner (read-only) or the invited supervisor.
 
 The demo starts local Auth and Firestore emulators, the local shared gateway and Vite. Nothing is sent to your Firebase project, and all data is discarded when you press Ctrl+C. Ports 4000, 4173, 4175, 8080 and 9099 must be free. Restart the command, then reload the page if sign-in fails.
 
@@ -102,6 +104,7 @@ Emulator tests use a `demo-` project and synthetic accounts; they never touch a 
 - `src/app/RouteMap.tsx`, `SharedRouteCard.tsx`, `followRoads.js`, `routePolyline.js`, `mapProviders.js`: Leaflet maps, the routing request, route-line decoding, and which tile and routing providers are used.
 - `src/app/Privacy.tsx`, `contact.js`: the privacy notice and its contact address (a placeholder until a real inbox exists).
 - `src/app/practiceData.js`, `PracticeChoices.tsx`: the skills and conditions catalogue (also used by the service) and its checkboxes.
+- `src/app/CommunityRoutes.tsx`, `publicLine.js`: the community library page, and trimming route lines before they are shared.
 - `src/app/StateRequirements.tsx`: the Georgia overview.
 - `server/sharedAccess.mjs`: the trusted shared-space service (memberships, invitations, routes, drives).
 - `server/sharedGateway.mjs`: HTTP handler shared by the local demo gateway (`localSharedGateway.mjs`) and the deployable server (`main.mjs`, configured by `config.mjs`).
